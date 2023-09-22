@@ -2,7 +2,7 @@ use atlas_communication::FullNetworkNode;
 use atlas_communication::message_signing::NetworkMessageSignatureVerifier;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
 use atlas_communication::serialize::Serializable;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 use crate::log_transfer::networking::serialize::LogTransferMessage;
 use crate::messages::signature_ver::SigVerifier;
 use crate::ordering_protocol::networking::serialize::OrderingProtocolMessage;

@@ -18,11 +18,11 @@ serialize_serde = ["serde"]
 serialize_capnp = ["atlas-capnp"]
 
 [dependencies]
-atlas-common = { path = "../atlas-common" }
-atlas-communication = { path = "../atlas-communication" }
-atlas-execution = { path = "../atlas-execution" }
-atlas-capnp = { path = "../atlas-capnp", optional = true }
-atlas-metrics = { path = "../atlas-metrics" }
+atlas-common = { path = "../Atlas-Common" }
+atlas-communication = { path = "../Atlas-Communication" }
+atlas-smr-application = { path = "../Atlas-SMR-Application" }
+atlas-capnp = { path = "../Atlas-capnp", optional = true }
+atlas-metrics = { path = "../Atlas-Metrics" }
 serde = { version = "*", optional = true }
 crossbeam = "0.8.2"
 intmap = "2.0.0"

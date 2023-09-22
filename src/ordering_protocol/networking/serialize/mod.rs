@@ -1,12 +1,13 @@
 use std::fmt::Debug;
 use std::sync::Arc;
+#[cfg(feature = "serialize_serde")]
 use serde::{Deserialize, Serialize};
 use atlas_common::node_id::NodeId;
 use atlas_common::error::*;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::Header;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
 
 /// The basic methods needed for a view

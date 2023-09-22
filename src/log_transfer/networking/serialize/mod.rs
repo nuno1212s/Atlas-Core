@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use atlas_communication::message::Header;
 use atlas_common::error::*;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 use crate::log_transfer::networking::signature_ver::LogTransferVerificationHelper;
 use crate::ordering_protocol::networking::serialize::OrderingProtocolMessage;
 
