@@ -3,7 +3,7 @@ use std::sync::Arc;
 use atlas_common::channel::ChannelSyncTx;
 use atlas_common::error::*;
 use atlas_common::globals::ReadOnly;
-use atlas_execution::state::monolithic_state::{InstallStateMessage, MonolithicState};
+use atlas_smr_application::state::monolithic_state::{InstallStateMessage, MonolithicState};
 use crate::ordering_protocol::networking::serialize::NetworkView;
 
 use crate::persistent_log::MonolithicStateLog;

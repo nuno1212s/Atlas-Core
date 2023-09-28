@@ -1,6 +1,6 @@
 use atlas_common::error::Result;
 use atlas_common::ordering::SeqNo;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 use crate::ordering_protocol::{OrderingProtocol, OrderingProtocolArgs, PermissionedOrderingProtocol, SerProof, View};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, StatefulOrderProtocolMessage};
 use crate::persistent_log::StatefulOrderingProtocolLog;

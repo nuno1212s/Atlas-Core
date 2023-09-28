@@ -10,7 +10,7 @@ use atlas_common::globals::ReadOnly;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::StoredMessage;
 use atlas_communication::protocol_node::ProtocolNetworkNode;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 
 use crate::messages::StateTransfer;
 use crate::ordering_protocol::{ExecutionResult, OrderingProtocol};

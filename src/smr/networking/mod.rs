@@ -1,3 +1,5 @@
+pub mod serialize;
+
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -9,7 +11,7 @@ use atlas_communication::message::{SerializedMessage, StoredSerializedProtocolMe
 use atlas_communication::protocol_node::ProtocolNetworkNode;
 use atlas_communication::reconfiguration_node::{NetworkInformationProvider, ReconfigurationNode};
 use atlas_communication::serialize::Serializable;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 use crate::log_transfer::networking::LogTransferSendNode;
 use crate::log_transfer::networking::serialize::LogTransferMessage;
 use crate::ordering_protocol::networking::OrderProtocolSendNode;

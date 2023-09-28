@@ -5,11 +5,13 @@ use atlas_common::error::*;
 use atlas_common::globals::ReadOnly;
 use atlas_common::ordering::{SeqNo};
 use atlas_communication::message::StoredMessage;
-use atlas_execution::state::divisible_state::DivisibleState;
-use atlas_execution::state::monolithic_state::MonolithicState;
+use atlas_smr_application::serialize::ApplicationData;
+use atlas_smr_application::state::divisible_state::DivisibleState;
+use atlas_smr_application::state::monolithic_state::MonolithicState;
 use crate::ordering_protocol::stateful_order_protocol::DecLog;
 use crate::ordering_protocol::{LoggableMessage, SerProof, SerProofMetadata, View};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage, StatefulOrderProtocolMessage};
+use crate::smr::networking::serialize::DecisionLogMessage;
 use crate::state_transfer::{Checkpoint};
 
 
@@ -73,12 +75,41 @@ pub trait OrderingProtocolLog<D, OP>: Clone where OP: OrderingProtocolMessage<D>
 
     /// Invalidate all messages with sequence number equal to the given one
     fn write_invalidate(&self, write_mode: OperationMode, seq: SeqNo) -> Result<()>;
+
+    /// Read a proof from the log with the given sequence number
+    fn read_proof(&self, seq: SeqNo) -> Result<Option<SerProof<D, OP>>>;
+}
+
+/// The trait necessary for a permission logging protocol capable of simple
+/// storage operations related to permissioned protocol messages
+pub trait PermissionedOrderingProtocolLog<POP> where POP: PermissionedOrderingProtocolMessage {
+    /// Write a view info into the persistent log
+    fn write_view_info(&self, write_mode: OperationMode, view: View<POP>) -> Result<()>;
+
+    /// Read a view info from the persistent log
+    fn read_view_info(&self) -> Result<Option<View<POP>>>;
+}
+
+/// The trait that defines the the persistent decision log, so that the decision log can be persistent
+pub trait PersistentDecisionLog<D, OPM, DOP>: OrderingProtocolLog<D, OPM>
+    where D: ApplicationData, OPM: OrderingProtocolMessage<D>, DOP: DecisionLogMessage<D, OPM> {
+
+    /// A checkpoint has been done on the state, so we can clear the current decision log
+    fn checkpoint_received<OPL>(&self, mode: OperationMode, seq: SeqNo);
+
+    /// Finalize the writing of a given proof
+    fn finalize_proof_write<OPL>(&self, mode: OperationMode);
+
+    /// Read the decision log from the persistent storage
+    fn read_decision_log<OPL>(&self, mode: OperationMode) -> Result<Option<DecLog<D, OPM, DOP>>>;
+
+    /// Write the decision log into the persistent log
+    fn write_decision_log<OPL>(&self, mode: OperationMode, log: DecLog<D, OPM, DOP>) -> Result<()>;
 }
 
 /// Complements the default [`OrderingProtocolLog`] with methods for proofs and decided logs
 pub trait StatefulOrderingProtocolLog<D, OPM, SOPM, POP>: OrderingProtocolLog<D, OPM>
     where OPM: OrderingProtocolMessage<D>, SOPM: StatefulOrderProtocolMessage<D, OPM>, POP: PermissionedOrderingProtocolMessage {
-
     /// Write to the persistent log the latest View information
     fn write_view_info(&self, write_mode: OperationMode, view_seq: View<POP>) -> Result<()>;
 
