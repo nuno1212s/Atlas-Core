@@ -2,12 +2,14 @@ use atlas_smr_application::serialize::ApplicationData;
 use atlas_common::error::*;
 use atlas_common::ordering::SeqNo;
 use crate::ordering_protocol::{OrderingProtocol, SerProof};
+use crate::ordering_protocol::persistable::PersistableOrderProtocolV2;
 use crate::persistent_log::PersistentDecisionLog;
 use crate::smr::networking::serialize::DecisionLogMessage;
 
 pub type DecLog<D, OP, LS> = <LS as DecisionLogMessage<D, OP>>::DecLog;
 
-pub trait DecisionLog<D, OP, NT, PL> where D: ApplicationData, OP: OrderingProtocol<D, NT, PL> {
+pub trait DecisionLog<D, OP, NT, PL> where D: ApplicationData, OP: OrderingProtocol<D, NT, PL> + PersistableOrderProtocolV2<D, OP::Serialization> {
+
     /// The serialization type containing the serializable parts for the decision log
     type LogSerialization: DecisionLogMessage<D, OP::Serialization>;
 
@@ -15,6 +17,10 @@ pub trait DecisionLog<D, OP, NT, PL> where D: ApplicationData, OP: OrderingProto
 
     /// Initialize the decision log of the
     fn initialize_decision_log(config: Self::Config, persistent_log: PL) -> Option<DecLog<D, OP, Self::LogSerialization>>
+        where PL: PersistentDecisionLog<D, OP, Self::LogSerialization>;
+
+    /// Clear the sequence number in the decision log
+    fn clear_sequence_number(&mut self, seq: SeqNo) -> Result<()>
         where PL: PersistentDecisionLog<D, OP, Self::LogSerialization>;
 
     /// Sequence number decided by the ordering protocol
@@ -35,7 +41,7 @@ pub trait DecisionLog<D, OP, NT, PL> where D: ApplicationData, OP: OrderingProto
         where PL: PersistentDecisionLog<D, OP, Self::LogSerialization>;
 
     /// A checkpoint has been done of the state, meaning we can effectively
-    /// delete the decisions.
+    /// delete the decisions up until the given sequence number.
     fn state_checkpoint(&self, seq: SeqNo) -> Result<()>
         where PL: PersistentDecisionLog<D, OP, Self::LogSerialization>;
 

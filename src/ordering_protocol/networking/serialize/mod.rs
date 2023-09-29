@@ -31,6 +31,9 @@ pub trait OrderProtocolLog: Orderable {
 /// Proof of the order protocol message
 pub trait OrderProtocolProof: Orderable {
     // At the moment I only need orderable, but I might need more in the future
+
+    fn contained_messages(&self) -> usize;
+
 }
 
 pub trait PermissionedOrderingProtocolMessage: Send + Sync {
@@ -62,15 +65,6 @@ pub trait OrderingProtocolMessage<D>: Send + Sync {
     #[cfg(feature = "serialize_serde")]
     type LoggableMessage: Orderable + for<'a> Deserialize<'a> + Serialize + Send + Clone + Debug;
 
-    /// A proof of a given Sequence number in the consensus protocol
-    /// This is used when requesting the latest consensus id in the state transfer protocol,
-    /// in order to verify that a given consensus id is valid
-    #[cfg(feature = "serialize_capnp")]
-    type Proof: OrderProtocolProof + Send + Clone;
-
-    #[cfg(feature = "serialize_serde")]
-    type Proof: OrderProtocolProof + for<'a> Deserialize<'a> + Serialize + Send + Clone;
-
     /// The metadata type for storing the proof in the persistent storage
     /// Since the message will be stored in the persistent storage, it needs to be serializable
     /// This should provide all the necessary final information to assemble the proof from the messages
@@ -79,6 +73,17 @@ pub trait OrderingProtocolMessage<D>: Send + Sync {
 
     #[cfg(feature = "serialize_capnp")]
     type ProofMetadata: Orderable + Send + Clone;
+    
+    /// A proof of a given Sequence number in the consensus protocol
+    /// This is used as the type to fully represent the validity of a given SeqNo in the protocol
+    /// A proof with SeqNo X should mean that X has been decided correctly
+    /// This should be composed of some metadata and a set of LoggableMessages
+    #[cfg(feature = "serialize_capnp")]
+    type Proof: OrderProtocolProof + Send + Clone;
+
+    #[cfg(feature = "serialize_serde")]
+    type Proof: OrderProtocolProof + for<'a> Deserialize<'a> + Serialize + Send + Clone;
+
 
     fn verify_order_protocol_message<NI, OPVH>(network_info: &Arc<NI>,
                                                header: &Header,

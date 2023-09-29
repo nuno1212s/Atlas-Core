@@ -6,9 +6,9 @@ use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::StoredMessage;
-use atlas_execution::app::UpdateBatch;
-use atlas_execution::ExecutorHandle;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::app::UpdateBatch;
+use atlas_smr_application::ExecutorHandle;
+use atlas_smr_application::serialize::ApplicationData;
 
 use crate::messages::{ClientRqInfo, Protocol};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
@@ -19,6 +19,7 @@ use crate::timeouts::{RqTimeout, Timeouts};
 pub mod reconfigurable_order_protocol;
 pub mod stateful_order_protocol;
 pub mod networking;
+pub mod persistable;
 
 pub type View<POP: PermissionedOrderingProtocolMessage> = <POP as PermissionedOrderingProtocolMessage>::ViewInfo;
 
