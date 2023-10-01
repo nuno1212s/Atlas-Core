@@ -6,9 +6,9 @@ use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::StoredMessage;
-use atlas_execution::app::UpdateBatch;
-use atlas_execution::ExecutorHandle;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::app::UpdateBatch;
+use atlas_smr_application::ExecutorHandle;
+use atlas_smr_application::serialize::ApplicationData;
 
 use crate::messages::{ClientRqInfo, Protocol};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
@@ -17,27 +17,25 @@ use crate::request_pre_processing::{BatchOutput, RequestPreProcessor};
 use crate::timeouts::{RqTimeout, Timeouts};
 
 pub mod reconfigurable_order_protocol;
-pub mod stateful_order_protocol;
+pub mod loggable;
 pub mod networking;
 
 pub type View<POP: PermissionedOrderingProtocolMessage> = <POP as PermissionedOrderingProtocolMessage>::ViewInfo;
 
 pub type ProtocolMessage<D, OP> = <OP as OrderingProtocolMessage<D>>::ProtocolMessage;
-pub type LoggableMessage<D, OP> = <OP as OrderingProtocolMessage<D>>::LoggableMessage;
-pub type SerProof<D, OP> = <OP as OrderingProtocolMessage<D>>::Proof;
-pub type SerProofMetadata<D, OP> = <OP as OrderingProtocolMessage<D>>::ProofMetadata;
+pub type DecisionMetadata<D, OP> = <OP as OrderingProtocolMessage<D>>::ProofMetadata;
 
-pub struct OrderingProtocolArgs<D, NT, PL>(pub ExecutorHandle<D>, pub Timeouts,
-                                           pub RequestPreProcessor<D::Request>,
-                                           pub BatchOutput<D::Request>, pub Arc<NT>,
-                                           pub PL, pub Vec<NodeId>) where D: ApplicationData;
+pub struct OrderingProtocolArgs<D, NT>(pub ExecutorHandle<D>, pub Timeouts,
+                                       pub RequestPreProcessor<D::Request>,
+                                       pub BatchOutput<D::Request>, pub Arc<NT>,
+                                       pub Vec<NodeId>) where D: ApplicationData;
 
 pub trait OrderProtocolTolerance {
     fn get_n_for_f(f: usize) -> usize;
 }
 
 /// The trait for an ordering protocol to be implemented in Atlas
-pub trait OrderingProtocol<D, NT, PL>: OrderProtocolTolerance + Orderable where D: ApplicationData + 'static {
+pub trait OrderingProtocol<D, NT>: OrderProtocolTolerance + Orderable where D: ApplicationData + 'static {
     /// The type which implements OrderingProtocolMessage, to be implemented by the developer
     type Serialization: OrderingProtocolMessage<D> + 'static;
 
@@ -45,12 +43,11 @@ pub trait OrderingProtocol<D, NT, PL>: OrderProtocolTolerance + Orderable where 
     type Config;
 
     /// Initialize this ordering protocol with the given configuration, executor, timeouts and node
-    fn initialize(config: Self::Config, args: OrderingProtocolArgs<D, NT, PL>) -> Result<Self> where
+    fn initialize(config: Self::Config, args: OrderingProtocolArgs<D, NT>) -> Result<Self> where
         Self: Sized;
 
     /// Handle a protocol message that was received while we are executing another protocol
-    fn handle_off_ctx_message(&mut self, message: StoredMessage<Protocol<ProtocolMessage<D, Self::Serialization>>>)
-        where PL: OrderingProtocolLog<D, Self::Serialization>;
+    fn handle_off_ctx_message(&mut self, message: StoredMessage<Protocol<ProtocolMessage<D, Self::Serialization>>>);
 
     /// Handle the protocol being executed having changed (for example to the state transfer protocol)
     /// This is important for some of the protocols, which need to know when they are being executed or not
@@ -59,37 +56,24 @@ pub trait OrderingProtocol<D, NT, PL>: OrderProtocolTolerance + Orderable where 
     /// Poll from the ordering protocol in order to know what we should do next
     /// We do this to check if there are already messages waiting to be executed that were received ahead of time and stored.
     /// Or whether we should run state transfer or wait for messages from other replicas
-    fn poll(&mut self) -> OrderProtocolPoll<ProtocolMessage<D, Self::Serialization>, D::Request>
-        where PL: OrderingProtocolLog<D, Self::Serialization>;
+    fn poll(&mut self) -> OrderProtocolPoll<ProtocolMessage<D, Self::Serialization>, D::Request>;
 
     /// Process a protocol message that we have received
     /// This can be a message received from the poll() method or a message received from other replicas.
-    fn process_message(&mut self, message: StoredMessage<Protocol<ProtocolMessage<D, Self::Serialization>>>) -> Result<OrderProtocolExecResult<D::Request>>
-        where PL: OrderingProtocolLog<D, Self::Serialization>;
-
-    /// Get the current sequence number of the protocol, combined with a proof of it so we can send it to other replicas
-    fn sequence_number_with_proof(&self) -> Result<Option<(SeqNo, SerProof<D, Self::Serialization>)>>
-        where PL: OrderingProtocolLog<D, Self::Serialization>;
-
-    /// Verify the sequence number sent by another replica. This doesn't pass a mutable reference since we don't want to
-    /// make any changes to the state of the protocol here (or allow the implementer to do so). Instead, we want to
-    /// just verify this sequence number
-    fn verify_sequence_number(&self, seq_no: SeqNo, proof: &SerProof<D, Self::Serialization>) -> Result<bool>;
+    fn process_message(&mut self, message: StoredMessage<Protocol<ProtocolMessage<D, Self::Serialization>>>)
+        -> Result<OPExecResult<DecisionMetadata<D, Self::Serialization>, ProtocolMessage<D, Self::Serialization>, D::Request>>;
 
     /// Install a given sequence number
-    fn install_seq_no(&mut self, seq_no: SeqNo) -> Result<()>
-        where PL: OrderingProtocolLog<D, Self::Serialization>;
+    fn install_seq_no(&mut self, seq_no: SeqNo) -> Result<()>;
 
     /// Handle a timeout received from the timeouts layer
-    fn handle_timeout(&mut self, timeout: Vec<RqTimeout>) -> Result<OrderProtocolExecResult<D::Request>>
-        where PL: OrderingProtocolLog<D, Self::Serialization>;
+    fn handle_timeout(&mut self, timeout: Vec<RqTimeout>) -> Result<OrderProtocolExecResult<D::Request>>;
 }
 
 
 /// A permissioned ordering protocol, meaning only a select few are actually part of the quorum that decides the
 /// ordering of the operations.
 pub trait PermissionedOrderingProtocol {
-
     type PermissionedSerialization: PermissionedOrderingProtocolMessage + 'static;
 
     /// Get the current view of the ordering protocol
@@ -107,6 +91,36 @@ pub enum OrderProtocolPoll<P, O> {
     Decided(Vec<ProtocolConsensusDecision<O>>),
     QuorumJoined(Option<Vec<ProtocolConsensusDecision<O>>>, NodeId, Vec<NodeId>),
     RePoll,
+}
+
+/// A given decision and information about it
+pub struct Decision<MD, P> {
+    seq: SeqNo,
+    // Whether we should clear the following decision's state
+    // This is for when a parallel consensus algorithm wants to clear the upcoming
+    // Decisions which were partially decided due so some reason (i.e. the view has changed
+    // so all those decisions are invalid now)
+    clear_upcoming: bool,
+    decision_info: DecisionInfo<MD, P>
+}
+
+/// Information about a given decision
+pub enum DecisionInfo<MD, P> {
+    //TODO: Decision metadata in order to then create the proof
+    FullDecision(MD, Vec<StoredMessage<Protocol<P>>>),
+    //TODO: Decision metadata
+    DecisionMetadata(MD),
+    PartialDecision(Vec<StoredMessage<Protocol<P>>>),
+}
+
+/// The result of the ordering protocol executing a message
+pub enum OPExecResult<MD, P, D> {
+    MessageDropped,
+    MessageQueued,
+    ProgressedDecision(Decision<MD, P>),
+    Decided(Vec<Decision<MD, P>>, Vec<ProtocolConsensusDecision<D>>),
+    QuorumJoined(Vec<Decision<MD, P>>, Option<Vec<ProtocolConsensusDecision<D>>>),
+    RunCst,
 }
 
 /// Result from executing a message in the ordering protocol

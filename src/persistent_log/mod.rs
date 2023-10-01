@@ -9,13 +9,14 @@ use atlas_smr_application::serialize::ApplicationData;
 use atlas_smr_application::state::divisible_state::DivisibleState;
 use atlas_smr_application::state::monolithic_state::MonolithicState;
 use crate::ordering_protocol::stateful_order_protocol::DecLog;
-use crate::ordering_protocol::{LoggableMessage, SerProof, SerProofMetadata, View};
+use crate::ordering_protocol::{DecisionMetadata, LoggableMessage, SerProof, SerProofMetadata, View};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage, StatefulOrderProtocolMessage};
+use crate::ordering_protocol::loggable::PersistentOrderProtocolTypes;
 use crate::smr::networking::serialize::DecisionLogMessage;
 use crate::state_transfer::{Checkpoint};
 
 
-///How should the data be written and response delivered?
+/// How should the data be written and response delivered?
 /// If Sync is chosen the function will block on the call and return the result of the operation
 /// If Async is chosen the function will not block and will return the response as a message to a channel
 pub enum OperationMode {
@@ -57,8 +58,7 @@ pub trait PersistableOrderProtocol<D, OPM, SOPM> where OPM: OrderingProtocolMess
 
 pub trait PersistableStateTransferProtocol {}
 
-/// The trait necessary for a logging protocol capable of simple (stateless) ordering.
-/// Does not have any methods for proofs or decided logs since in theory there is no need for them
+/// The trait necessary for a persistent log protocol to be used as the persistent log layer
 pub trait OrderingProtocolLog<D, OP>: Clone where OP: OrderingProtocolMessage<D> {
     /// Write to the persistent log the latest committed sequence number
     fn write_committed_seq_no(&self, write_mode: OperationMode, seq: SeqNo) -> Result<()>;
@@ -91,14 +91,17 @@ pub trait PermissionedOrderingProtocolLog<POP> where POP: PermissionedOrderingPr
 }
 
 /// The trait that defines the the persistent decision log, so that the decision log can be persistent
-pub trait PersistentDecisionLog<D, OPM, DOP>: OrderingProtocolLog<D, OPM>
-    where D: ApplicationData, OPM: OrderingProtocolMessage<D>, DOP: DecisionLogMessage<D, OPM> {
+pub trait PersistentDecisionLog<D, OPM, POP, DOP>: OrderingProtocolLog<D, OPM>
+    where D: ApplicationData,
+          OPM: OrderingProtocolMessage<D>,
+          POP: PersistentOrderProtocolTypes<D, OPM>,
+          DOP: DecisionLogMessage<D, OPM, POP> {
 
     /// A checkpoint has been done on the state, so we can clear the current decision log
     fn checkpoint_received<OPL>(&self, mode: OperationMode, seq: SeqNo);
 
     /// Finalize the writing of a given proof
-    fn finalize_proof_write<OPL>(&self, mode: OperationMode);
+    fn finalize_proof_write<OPL>(&self, mode: OperationMode, seq: SeqNo, metadata: DecisionMetadata<D, OPM>);
 
     /// Read the decision log from the persistent storage
     fn read_decision_log<OPL>(&self, mode: OperationMode) -> Result<Option<DecLog<D, OPM, DOP>>>;
