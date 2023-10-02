@@ -4,7 +4,8 @@ use atlas_common::error::*;
 use atlas_common::globals::ReadOnly;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::StoredMessage;
-use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol};
+use atlas_smr_application::app::UpdateBatch;
+use crate::ordering_protocol::{Decision, DecisionMetadata, OrderingProtocol, ProtocolMessage};
 use crate::ordering_protocol::loggable::{LMessage, LoggableOrderProtocol, PersistentOrderProtocolTypes, PProof};
 use crate::persistent_log::PersistentDecisionLog;
 use crate::smr::networking::serialize::DecisionLogMessage;
@@ -33,14 +34,11 @@ pub trait DecisionLog<D, OP, NT, PL>: Orderable where D: ApplicationData,
         where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>;
 
     /// The given sequence number was advanced in state with the given
-    fn sequence_number_advanced(&mut self, seq: SeqNo, message: StoredConsensusMessage<D, OP::Serialization, OP::PersistableTypes>) -> Result<()>
-        where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>;
-
-    fn sequence_number_decided(&mut self, seq: SeqNo, metadata: DecisionMetadata<D, OP::Serialization>) -> Result<()>
+    fn sequence_number_advanced(&mut self, decision_info: Decision<DecisionMetadata<D, OP::Serialization>, ProtocolMessage<D, OP::Serialization>, D::Request>) -> Result<()>
         where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>;
 
     /// Sequence number decided by the ordering protocol
-    fn sequence_number_decided_with_full_proof(&mut self, proof: PProof<D, OP::Serialization, OP::PersistableTypes>) -> Result<()>
+    fn sequence_number_decided_with_full_proof(&mut self, proof: PProof<D, OP::Serialization, OP::PersistableTypes>, requests: UpdateBatch<D::Request>) -> Result<()>
         where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>;
 
     /// Install a log received from other replicas in the system

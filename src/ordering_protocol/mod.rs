@@ -94,32 +94,37 @@ pub enum OrderProtocolPoll<P, O> {
 }
 
 /// A given decision and information about it
-pub struct Decision<MD, P> {
+/// To be taken by the replica and processed accordingly
+pub struct Decision<MD, P, O> {
     seq: SeqNo,
     // Whether we should clear the following decision's state
     // This is for when a parallel consensus algorithm wants to clear the upcoming
     // Decisions which were partially decided due so some reason (i.e. the view has changed
     // so all those decisions are invalid now)
     clear_upcoming: bool,
-    decision_info: DecisionInfo<MD, P>
+    // Information about the decision
+    decision_info: DecisionInfo<MD, P, O>
 }
 
 /// Information about a given decision
-pub enum DecisionInfo<MD, P> {
-    //TODO: Decision metadata in order to then create the proof
+pub enum DecisionInfo<MD, P, O> {
+    // The full decision, already made by the protocol
     FullDecision(MD, Vec<StoredMessage<Protocol<P>>>),
-    //TODO: Decision metadata
+    // The decision metadata, does not indicate that the decision is made
     DecisionMetadata(MD),
+    // Partial information
     PartialDecision(Vec<StoredMessage<Protocol<P>>>),
+    // The decision has been completed
+    DecisionDone(UpdateBatch<O>)
 }
 
 /// The result of the ordering protocol executing a message
 pub enum OPExecResult<MD, P, D> {
     MessageDropped,
     MessageQueued,
-    ProgressedDecision(Decision<MD, P>),
-    Decided(Vec<Decision<MD, P>>, Vec<ProtocolConsensusDecision<D>>),
-    QuorumJoined(Vec<Decision<MD, P>>, Option<Vec<ProtocolConsensusDecision<D>>>),
+    ProgressedDecision(Vec<Decision<MD, P, D>>),
+    Decided(Vec<Decision<MD, P, D>>, Vec<ProtocolConsensusDecision<D>>),
+    QuorumJoined(Vec<Decision<MD, P, D>>, Option<Vec<ProtocolConsensusDecision<D>>>),
     RunCst,
 }
 
@@ -155,9 +160,6 @@ pub struct ProtocolConsensusDecision<O> {
 
     /// The consensus decision
     executable_batch: UpdateBatch<O>,
-
-    /// Additional information about a batch
-    batch_info: Option<DecisionInformation>,
 }
 
 /// Information about the completed batch,
