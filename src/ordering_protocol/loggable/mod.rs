@@ -6,7 +6,9 @@ use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_common::error::*;
 use atlas_communication::message::StoredMessage;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
+use atlas_smr_application::app::UpdateBatch;
 use atlas_smr_application::serialize::ApplicationData;
+use crate::messages::StoredRequestMessage;
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, OrderProtocolProof};
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
 use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol, ProtocolMessage};
@@ -55,7 +57,7 @@ pub type LMessage<D, OP, POP> = <POP as PersistentOrderProtocolTypes<D, OP>>::Lo
 
 /// The trait to define the necessary methods and data types for this order protocol
 /// to be compatible with the decision log
-pub trait LoggableOrderProtocol<D, NT, PL>: OrderingProtocol<D, NT> where D: ApplicationData {
+pub trait LoggableOrderProtocol<D, NT>: OrderingProtocol<D, NT> where D: ApplicationData {
     /// The required data types for working with the decision log
     type PersistableTypes: PersistentOrderProtocolTypes<D, Self::Serialization>;
 
@@ -85,4 +87,6 @@ pub trait LoggableOrderProtocol<D, NT, PL>: OrderingProtocol<D, NT> where D: App
     fn decompose_proof(proof: &PProof<D, Self::Serialization, Self::PersistableTypes>)
                        -> (&DecisionMetadata<D, Self::Serialization>,
                            Vec<&StoredMessage<LMessage<D, Self::Serialization, Self::PersistableTypes>>>);
+
+    fn get_requests_in_proof(proof: &PProof<D, Self::Serialization, Self::PersistableTypes>) -> UpdateBatch<D::Request>;
 }

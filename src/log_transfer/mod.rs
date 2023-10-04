@@ -9,6 +9,7 @@ use atlas_smr_application::serialize::ApplicationData;
 
 use crate::log_transfer::networking::serialize::LogTransferMessage;
 use crate::messages::LogTransfer;
+use crate::ordering_protocol::loggable::LoggableOrderProtocol;
 use crate::ordering_protocol::OrderingProtocol;
 use crate::ordering_protocol::stateful_order_protocol::StatefulOrderProtocol;
 use crate::persistent_log::{PersistentDecisionLog, StatefulOrderingProtocolLog};
@@ -36,9 +37,9 @@ pub enum LTTimeoutResult {
     NotNeeded,
 }
 
-pub trait LogTransferProtocolV2<D, OP, DOP, NT, PL> where D: ApplicationData + 'static,
-                                                          OP: OrderingProtocol<D, NT, PL> + 'static,
-                                                          DOP: DecisionLog<D, OP, NT, PL> + 'static {
+pub trait LogTransferProtocol<D, OP, DL, NT, PL> where D: ApplicationData + 'static,
+                                                       OP: LoggableOrderProtocol<D, NT> + 'static,
+                                                       DL: DecisionLog<D, OP, NT, PL> + 'static {
     /// The type which implements StateTransferMessage, to be implemented by the developer
     type Serialization: LogTransferMessage<D, OP::Serialization> + 'static;
 
@@ -50,60 +51,24 @@ pub trait LogTransferProtocolV2<D, OP, DOP, NT, PL> where D: ApplicationData + '
         where Self: Sized;
 
     /// Request the latest logs from the rest of the replicas
-    fn request_latest_log(&mut self, decision_log: &mut DOP) -> Result<()>
-        where PL: PersistentDecisionLog<D, OP::Serialization, DOP::LogSerialization>;
+    fn request_latest_log(&mut self, decision_log: &mut DL) -> Result<()>
+        where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>;
 
     /// Handle a state transfer protocol message that was received while executing the ordering protocol
-    fn handle_off_ctx_message(&mut self, decision_log: &mut DOP,
-                              message: StoredMessage<LogTransfer<LogTM<D, OP::Serialization, Self::Serialization>>>)
+    fn handle_off_ctx_message(&mut self, decision_log: &mut DL,
+                              message: StoredMessage<LogTM<D, OP::Serialization, Self::Serialization>>)
                               -> Result<()>
-        where PL: PersistentDecisionLog<D, OP::Serialization, DOP::LogSerialization>;
+        where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>;
 
     /// Process a log transfer protocol message, received from other replicas
     ///
-    fn process_message(&mut self, decision_log: &mut DOP, message: StoredMessage<LogTM<D, OP::Serialization, Self::Serialization>>) -> Result<LTResult<D>>
-        where PL: PersistentDecisionLog<D, OP::Serialization, DOP::LogSerialization>;
+    fn process_message(&mut self, decision_log: &mut DL, message: StoredMessage<LogTM<D, OP::Serialization, Self::Serialization>>) -> Result<LTResult<D>>
+        where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>;
 
+    /// Handle a timeout received from the timeout layer
     fn handle_timeout(&mut self, timeout: Vec<RqTimeout>) -> Result<LTTimeoutResult>
-        where PL: PersistentDecisionLog<D, OP::Serialization, DOP::LogSerialization>;
+        where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>;
 }
-
-/// The trait which defines the necessary methods for a log transfer protocol
-pub trait LogTransferProtocol<D, OP, NT, PL> where D: ApplicationData + 'static,
-                                                   OP: StatefulOrderProtocol<D, NT, PL> + 'static {
-    /// The type which implements StateTransferMessage, to be implemented by the developer
-    type Serialization: LogTransferMessage<D, OP::Serialization> + 'static;
-
-    /// The configuration type the protocol wants to accept
-    type Config;
-
-    /// Initialize the state transferring protocol with the given configuration, timeouts and communication layer
-    fn initialize(config: Self::Config, timeouts: Timeouts, node: Arc<NT>, log: PL) -> Result<Self>
-        where Self: Sized;
-
-    /// Request the latest state from the rest of replicas
-    fn request_latest_log(&mut self, order_protocol: &mut OP) -> Result<()>
-        where PL: StatefulOrderingProtocolLog<D, OP::Serialization, OP::StateSerialization, OP::PermissionedSerialization>;
-
-    /// Handle a state transfer protocol message that was received while executing the ordering protocol
-    fn handle_off_ctx_message(&mut self, order_protocol: &mut OP,
-                              message: StoredMessage<LogTransfer<LogTM<D, OP::Serialization, Self::Serialization>>>)
-                              -> Result<()>
-        where PL: StatefulOrderingProtocolLog<D, OP::Serialization, OP::StateSerialization, OP::PermissionedSerialization>;
-
-    /// Process a state transfer protocol message, received from other replicas
-    /// We also provide a mutable reference to the stateful ordering protocol, so the
-    /// state can be installed (if that's the case)
-    fn process_message(&mut self, order_protocol: &mut OP,
-                       message: StoredMessage<LogTransfer<LogTM<D, OP::Serialization, Self::Serialization>>>)
-                       -> Result<LTResult<D>>
-        where PL: StatefulOrderingProtocolLog<D, OP::Serialization, OP::StateSerialization, OP::PermissionedSerialization>;
-
-    /// Handle a timeout being received from the timeout layer
-    fn handle_timeout(&mut self, timeout: Vec<RqTimeout>) -> Result<LTTimeoutResult>
-        where PL: StatefulOrderingProtocolLog<D, OP::Serialization, OP::StateSerialization, OP::PermissionedSerialization>;
-}
-
 
 impl<D: ApplicationData> Debug for LTResult<D> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
