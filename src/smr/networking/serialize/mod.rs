@@ -7,6 +7,7 @@ use atlas_smr_application::serialize::ApplicationData;
 use atlas_common::error::*;
 use crate::ordering_protocol::networking::serialize::OrderingProtocolMessage;
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
+use crate::ordering_protocol::loggable::PersistentOrderProtocolTypes;
 
 pub trait OrderProtocolLog: Orderable {
     // At the moment I only need orderable, but I might need more in the future
@@ -15,15 +16,12 @@ pub trait OrderProtocolLog: Orderable {
 
 /// A trait defining what we need in order to verify parts of the decision log
 pub trait OrderProtocolLogPart: Orderable {
-
     fn first_seq(&self) -> Option<SeqNo>;
 
     fn last_seq(&self) -> Option<SeqNo>;
-
 }
 
-pub trait DecisionLogMessage<D, OPM> {
-
+pub trait DecisionLogMessage<D, OPM, POP> {
     /// A type that defines the log of decisions made since the last garbage collection
     /// (In the case of BFT SMR the log is GCed after a checkpoint of the application)
     #[cfg(feature = "serialize_capnp")]
@@ -45,5 +43,6 @@ pub trait DecisionLogMessage<D, OPM> {
         where NI: NetworkInformationProvider,
               D: ApplicationData,
               OPM: OrderingProtocolMessage<D>,
+              POP: PersistentOrderProtocolTypes<D, OPM>,
               OPVH: OrderProtocolSignatureVerificationHelper<D, OPM, NI>,;
 }

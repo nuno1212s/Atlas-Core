@@ -9,9 +9,11 @@ use atlas_smr_application::serialize::ApplicationData;
 use atlas_smr_application::state::divisible_state::DivisibleState;
 use atlas_smr_application::state::monolithic_state::MonolithicState;
 use crate::ordering_protocol::stateful_order_protocol::DecLog;
-use crate::ordering_protocol::{LoggableMessage, SerProof, SerProofMetadata, View};
+use crate::ordering_protocol::{DecisionMetadata, LoggableMessage, ProtocolConsensusDecision, SerProof, SerProofMetadata, View};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage, StatefulOrderProtocolMessage};
+use crate::ordering_protocol::loggable::{PersistentOrderProtocolTypes, PProof};
 use crate::smr::networking::serialize::DecisionLogMessage;
+use crate::smr::smr_decision_log::{DecLog, StoredConsensusMessage};
 use crate::state_transfer::{Checkpoint};
 
 
@@ -27,35 +29,6 @@ pub enum OperationMode {
     BlockingSync,
 }
 
-/// Shortcuts for the types used in the protocol
-/// The trait with all the necessary types for the protocol to be used with our persistent storage system
-/// We need this because of the way the messages are stored. Since we want to store the messages at the same
-/// time we are receiving them, we divide the messages into various instances of KV-DB (which also parallelizes the
-/// writing into them).
-pub trait PersistableOrderProtocol<D, OPM, SOPM> where OPM: OrderingProtocolMessage<D>, SOPM: StatefulOrderProtocolMessage<D, OPM> {
-
-    /// The types of messages to be stored. This is used due to the parallelization described above.
-    /// Each of the names provided here will be a different KV-DB instance (in the case of RocksDB, a column family)
-    fn message_types() -> Vec<&'static str>;
-
-    /// Get the message type for a given message, must correspond to a string returned by
-    /// [PersistableOrderProtocol::message_types]
-    fn get_type_for_message(msg: &LoggableMessage<D, OPM>) -> Result<&'static str>;
-
-    /// Initialize a proof from the metadata and messages stored in persistent storage
-    fn init_proof_from(metadata: SerProofMetadata<D, OPM>, messages: Vec<StoredMessage<LoggableMessage<D, OPM>>>) -> SerProof<D, OPM>;
-
-    /// Initialize a decision log from the messages stored in persistent storage
-    fn init_dec_log(proofs: Vec<SerProof<D, OPM>>) -> DecLog<D, OPM, SOPM>;
-
-    /// Decompose a given proof into it's metadata and messages, ready to be persisted
-    fn decompose_proof(proof: &SerProof<D, OPM>) -> (&SerProofMetadata<D, OPM>, Vec<&StoredMessage<LoggableMessage<D, OPM>>>);
-
-    /// Decompose a decision log into its separate proofs, so they can then be further decomposed
-    /// into metadata and messages
-    fn decompose_dec_log(proofs: &DecLog<D, OPM, SOPM>) -> Vec<&SerProof<D, OPM>>;
-}
-
 pub trait PersistableStateTransferProtocol {}
 
 /// The trait necessary for a persistent log protocol to be used as the persistent log layer
@@ -64,20 +37,15 @@ pub trait OrderingProtocolLog<D, OP>: Clone where OP: OrderingProtocolMessage<D>
     fn write_committed_seq_no(&self, write_mode: OperationMode, seq: SeqNo) -> Result<()>;
 
     /// Write a given message to the persistent log
-    fn write_message(&self, write_mode: OperationMode, msg: Arc<ReadOnly<StoredMessage<LoggableMessage<D, OP>>>>) -> Result<()>;
+    fn write_message(&self, write_mode: OperationMode, msg: StoredConsensusMessage<D, OP>) -> Result<()>;
 
     /// Write the metadata for a given proof to the persistent log
     /// This in combination with the messages for that sequence number should form a valid proof
-    fn write_proof_metadata(&self, write_mode: OperationMode, metadata: SerProofMetadata<D, OP>) -> Result<()>;
-
-    /// Write a given proof to the persistent log
-    fn write_proof(&self, write_mode: OperationMode, proof: SerProof<D, OP>) -> Result<()>;
+    fn write_decision_metadata(&self, write_mode: OperationMode, metadata: DecisionMetadata<D, OP>) -> Result<()>;
 
     /// Invalidate all messages with sequence number equal to the given one
     fn write_invalidate(&self, write_mode: OperationMode, seq: SeqNo) -> Result<()>;
 
-    /// Read a proof from the log with the given sequence number
-    fn read_proof(&self, seq: SeqNo) -> Result<Option<SerProof<D, OP>>>;
 }
 
 /// The trait necessary for a permission logging protocol capable of simple
@@ -91,34 +59,35 @@ pub trait PermissionedOrderingProtocolLog<POP> where POP: PermissionedOrderingPr
 }
 
 /// The trait that defines the the persistent decision log, so that the decision log can be persistent
-pub trait PersistentDecisionLog<D, OPM, DOP>: OrderingProtocolLog<D, OPM>
-    where D: ApplicationData, OPM: OrderingProtocolMessage<D>,
-          DOP: DecisionLogMessage<D, OPM> {
+pub trait PersistentDecisionLog<D, OPM, POP, DOP>: OrderingProtocolLog<D, OPM>
+    where D: ApplicationData,
+          OPM: OrderingProtocolMessage<D>,
+          POP: PersistentOrderProtocolTypes<D, OPM>,
+          DOP: DecisionLogMessage<D, OPM, POP> {
 
     /// A checkpoint has been done on the state, so we can clear the current decision log
     fn checkpoint_received<OPL>(&self, mode: OperationMode, seq: SeqNo);
 
-    /// Finalize the writing of a given proof
-    fn finalize_proof_write<OPL>(&self, mode: OperationMode, seq: SeqNo);
+    /// Write a given proof to the persistent log
+    fn write_proof(&self, write_mode: OperationMode, proof: PProof<D, OPM, POP>) -> Result<()>;
+
+    /// Read a proof from the log with the given sequence number
+    fn read_proof(&self, seq: SeqNo) -> Result<Option<PProof<D, OPM, POP>>>;
 
     /// Read the decision log from the persistent storage
-    fn read_decision_log<OPL>(&self, mode: OperationMode) -> Result<Option<DecLog<D, OPM, DOP>>>;
+    fn read_decision_log<OPL>(&self, mode: OperationMode) -> Result<Option<DecLog<D, OPM, POP, DOP>>>;
 
     /// Write the decision log into the persistent log
-    fn write_decision_log<OPL>(&self, mode: OperationMode, log: DecLog<D, OPM, DOP>) -> Result<()>;
-}
+    fn write_decision_log<OPL>(&self, mode: OperationMode, log: DecLog<D, OPM, POP, DOP>) -> Result<()>;
 
-/// Complements the default [`OrderingProtocolLog`] with methods for proofs and decided logs
-pub trait StatefulOrderingProtocolLog<D, OPM, SOPM, POP>: OrderingProtocolLog<D, OPM>
-    where OPM: OrderingProtocolMessage<D>, SOPM: StatefulOrderProtocolMessage<D, OPM>, POP: PermissionedOrderingProtocolMessage {
-    /// Write to the persistent log the latest View information
-    fn write_view_info(&self, write_mode: OperationMode, view_seq: View<POP>) -> Result<()>;
-
-    /// Read the state from the persistent log
-    fn read_state(&self, write_mode: OperationMode) -> Result<Option<(View<POP>, DecLog<D, OPM, SOPM>)>>;
-
-    /// Write a given decision log to the persistent log
-    fn write_install_state(&self, write_mode: OperationMode, view: View<POP>, dec_log: DecLog<D, OPM, SOPM>) -> Result<()>;
+    /// Wait for the persistence of a given proof, if necessary
+    /// The return of this function is dependent on the current mode of the persistent log.
+    /// Namely, if we have to perform some sort of operations before the decision can be safely passed
+    /// to the executor, then we want to return [None] on this function. If there is no need
+    /// of further persistence, then the decision should be re returned with
+    /// [Some(ProtocolConsensusDecision<D::Request>)]
+    fn wait_for_full_persistence(&self, batch: ProtocolConsensusDecision<D::Request>)
+                                              -> Result<Option<ProtocolConsensusDecision<D::Request>>>;
 }
 
 ///

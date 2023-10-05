@@ -4,7 +4,7 @@ use atlas_common::error::*;
 use atlas_communication::message::Header;
 use atlas_communication::message_signing::NetworkMessageSignatureVerifier;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 
 use crate::log_transfer::networking::serialize::LogTransferMessage;
 use crate::messages::{ReplyMessage, RequestMessage, SystemMessage};

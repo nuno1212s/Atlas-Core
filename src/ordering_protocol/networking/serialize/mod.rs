@@ -57,43 +57,18 @@ pub trait OrderingProtocolMessage<D>: Send + Sync {
     #[cfg(feature = "serialize_serde")]
     type ProtocolMessage: Orderable + for<'a> Deserialize<'a> + Serialize + Send + Clone + Debug;
 
-    /// A shortcut type to messages that are going to be logged. (this is useful for situations
-    /// where we don't log all message types that we send)
-    #[cfg(feature = "serialize_capnp")]
-    type LoggableMessage: Orderable + Send + Clone;
-
-    #[cfg(feature = "serialize_serde")]
-    type LoggableMessage: Orderable + for<'a> Deserialize<'a> + Serialize + Send + Clone + Debug;
-
     /// The metadata type for storing the proof in the persistent storage
     /// Since the message will be stored in the persistent storage, it needs to be serializable
     /// This should provide all the necessary final information to assemble the proof from the messages
-    #[cfg(feature = "serialize_serde")]
-    type ProofMetadata: Orderable + for<'a> Deserialize<'a> + Serialize + Send + Clone;
-
     #[cfg(feature = "serialize_capnp")]
     type ProofMetadata: Orderable + Send + Clone;
-    
-    /// A proof of a given Sequence number in the consensus protocol
-    /// This is used as the type to fully represent the validity of a given SeqNo in the protocol
-    /// A proof with SeqNo X should mean that X has been decided correctly
-    /// This should be composed of some metadata and a set of LoggableMessages
-    #[cfg(feature = "serialize_capnp")]
-    type Proof: OrderProtocolProof + Send + Clone;
 
     #[cfg(feature = "serialize_serde")]
-    type Proof: OrderProtocolProof + for<'a> Deserialize<'a> + Serialize + Send + Clone;
-
+    type ProofMetadata: Orderable + for<'a> Deserialize<'a> + Serialize + Send + Clone;
 
     fn verify_order_protocol_message<NI, OPVH>(network_info: &Arc<NI>,
                                                header: &Header,
                                                message: Self::ProtocolMessage) -> Result<(bool, Self::ProtocolMessage)>
-        where NI: NetworkInformationProvider,
-              OPVH: OrderProtocolSignatureVerificationHelper<D, Self, NI>,
-              D: ApplicationData, Self: Sized;
-
-    fn verify_proof<NI, OPVH>(network_info: &Arc<NI>,
-                              proof: Self::Proof) -> Result<(bool, Self::Proof)>
         where NI: NetworkInformationProvider,
               OPVH: OrderProtocolSignatureVerificationHelper<D, Self, NI>,
               D: ApplicationData, Self: Sized;
@@ -115,28 +90,4 @@ pub trait OrderingProtocolMessage<D>: Send + Sync {
 
     #[cfg(feature = "serialize_capnp")]
     fn deserialize_proof_capnp(reader: febft_capnp::cst_messages_capnp::proof::Reader) -> Result<Self::Proof>;
-}
-
-/// The messages for the stateful ordering protocol
-pub trait StatefulOrderProtocolMessage<D, OPM>: Send + Sync {
-    /// A type that defines the log of decisions made since the last garbage collection
-    /// (In the case of BFT SMR the log is GCed after a checkpoint of the application)
-    #[cfg(feature = "serialize_capnp")]
-    type DecLog: OrderProtocolLog + Send + Clone;
-
-    #[cfg(feature = "serialize_serde")]
-    type DecLog: OrderProtocolLog + for<'a> Deserialize<'a> + Serialize + Send + Clone;
-
-    fn verify_decision_log<NI, OPVH>(network_info: &Arc<NI>, dec_log: Self::DecLog)
-                                            -> Result<(bool, Self::DecLog)>
-        where NI: NetworkInformationProvider,
-              D: ApplicationData,
-              OPM: OrderingProtocolMessage<D>,
-              OPVH: OrderProtocolSignatureVerificationHelper<D, OPM, NI>,;
-
-    #[cfg(feature = "serialize_capnp")]
-    fn serialize_declog_capnp(builder: febft_capnp::cst_messages_capnp::dec_log::Builder, msg: &Self::DecLog) -> Result<()>;
-
-    #[cfg(feature = "serialize_capnp")]
-    fn deserialize_declog_capnp(reader: febft_capnp::cst_messages_capnp::dec_log::Reader) -> Result<Self::DecLog>;
 }
