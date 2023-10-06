@@ -8,7 +8,7 @@ use atlas_communication::message::StoredMessage;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
 use atlas_smr_application::app::UpdateBatch;
 use atlas_smr_application::serialize::ApplicationData;
-use crate::messages::StoredRequestMessage;
+use crate::messages::{ClientRqInfo, StoredRequestMessage};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, OrderProtocolProof};
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
 use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol, ProtocolMessage};
@@ -67,5 +67,6 @@ pub trait LoggableOrderProtocol<D, NT>: OrderingProtocol<D, NT> where D: Applica
                        -> (&DecisionMetadata<D, Self::Serialization>,
                            Vec<&StoredMessage<ProtocolMessage<D, Self::Serialization>>>);
 
-    fn get_requests_in_proof(proof: &PProof<D, Self::Serialization, Self::PersistableTypes>) -> UpdateBatch<D::Request>;
+    fn get_requests_in_proof(proof: &PProof<D, Self::Serialization, Self::PersistableTypes>)
+                             -> (UpdateBatch<D::Request>, Vec<ClientRqInfo>);
 }

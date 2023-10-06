@@ -5,15 +5,15 @@ use atlas_common::error::*;
 use atlas_common::globals::ReadOnly;
 use atlas_common::ordering::{SeqNo};
 use atlas_communication::message::StoredMessage;
+use atlas_smr_application::app::UpdateBatch;
 use atlas_smr_application::serialize::ApplicationData;
 use atlas_smr_application::state::divisible_state::DivisibleState;
 use atlas_smr_application::state::monolithic_state::MonolithicState;
-use crate::ordering_protocol::stateful_order_protocol::DecLog;
-use crate::ordering_protocol::{DecisionMetadata, LoggableMessage, ProtocolConsensusDecision, SerProof, SerProofMetadata, View};
-use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage, StatefulOrderProtocolMessage};
+use crate::ordering_protocol::{DecisionMetadata, View};
+use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
 use crate::ordering_protocol::loggable::{PersistentOrderProtocolTypes, PProof};
 use crate::smr::networking::serialize::DecisionLogMessage;
-use crate::smr::smr_decision_log::{DecLog, StoredConsensusMessage};
+use crate::smr::smr_decision_log::{DecLog, LoggingDecision, StoredConsensusMessage};
 use crate::state_transfer::{Checkpoint};
 
 
@@ -77,6 +77,9 @@ pub trait PersistentDecisionLog<D, OPM, POP, DOP>: OrderingProtocolLog<D, OPM>
     /// Read the decision log from the persistent storage
     fn read_decision_log<OPL>(&self, mode: OperationMode) -> Result<Option<DecLog<D, OPM, POP, DOP>>>;
 
+    /// Reset the decision log on disk
+    fn reset_log(&self, mode: OperationMode) -> Result<()>;
+
     /// Write the decision log into the persistent log
     fn write_decision_log<OPL>(&self, mode: OperationMode, log: DecLog<D, OPM, POP, DOP>) -> Result<()>;
 
@@ -86,8 +89,8 @@ pub trait PersistentDecisionLog<D, OPM, POP, DOP>: OrderingProtocolLog<D, OPM>
     /// to the executor, then we want to return [None] on this function. If there is no need
     /// of further persistence, then the decision should be re returned with
     /// [Some(ProtocolConsensusDecision<D::Request>)]
-    fn wait_for_full_persistence(&self, batch: ProtocolConsensusDecision<D::Request>)
-                                              -> Result<Option<ProtocolConsensusDecision<D::Request>>>;
+    fn wait_for_full_persistence(&self, batch: UpdateBatch<D::Request>, decision_logging: LoggingDecision)
+                                              -> Result<Option<UpdateBatch<D::Request>>>;
 }
 
 ///
