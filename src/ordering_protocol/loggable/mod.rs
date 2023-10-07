@@ -12,7 +12,7 @@ use crate::messages::{ClientRqInfo, StoredRequestMessage};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, OrderProtocolProof};
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
 use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol, ProtocolMessage};
-use crate::smr::smr_decision_log::StoredConsensusMessage;
+use crate::smr::smr_decision_log::ShareableConsensusMessage;
 
 /// The trait definining the necessary data types for the ordering protocol to be used
 /// with the decision log
@@ -59,7 +59,7 @@ pub trait LoggableOrderProtocol<D, NT>: OrderingProtocol<D, NT> where D: Applica
 
     /// Initialize a proof from the metadata and messages stored by the decision log
     fn init_proof_from_scm(metadata: DecisionMetadata<D, Self::Serialization>,
-                           messages: Vec<StoredConsensusMessage<D, Self::Serialization>>)
+                           messages: Vec<ShareableConsensusMessage<D, Self::Serialization>>)
                            -> PProof<D, Self::Serialization, Self::PersistableTypes>;
 
     /// Decompose a given proof into it's metadata and messages, ready to be persisted

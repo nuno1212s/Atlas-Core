@@ -13,7 +13,7 @@ use crate::ordering_protocol::{DecisionMetadata, View};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
 use crate::ordering_protocol::loggable::{PersistentOrderProtocolTypes, PProof};
 use crate::smr::networking::serialize::DecisionLogMessage;
-use crate::smr::smr_decision_log::{DecLog, LoggingDecision, StoredConsensusMessage};
+use crate::smr::smr_decision_log::{DecLog, LoggingDecision, ShareableConsensusMessage};
 use crate::state_transfer::{Checkpoint};
 
 
@@ -37,7 +37,7 @@ pub trait OrderingProtocolLog<D, OP>: Clone where OP: OrderingProtocolMessage<D>
     fn write_committed_seq_no(&self, write_mode: OperationMode, seq: SeqNo) -> Result<()>;
 
     /// Write a given message to the persistent log
-    fn write_message(&self, write_mode: OperationMode, msg: StoredConsensusMessage<D, OP>) -> Result<()>;
+    fn write_message(&self, write_mode: OperationMode, msg: ShareableConsensusMessage<D, OP>) -> Result<()>;
 
     /// Write the metadata for a given proof to the persistent log
     /// This in combination with the messages for that sequence number should form a valid proof

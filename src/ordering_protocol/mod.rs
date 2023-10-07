@@ -16,6 +16,7 @@ use crate::messages::{ClientRqInfo, Protocol};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
 use crate::persistent_log::OrderingProtocolLog;
 use crate::request_pre_processing::{BatchOutput, RequestPreProcessor};
+use crate::smr::smr_decision_log::{ShareableConsensusMessage, ShareableMessage};
 use crate::timeouts::{RqTimeout, Timeouts};
 
 pub mod reconfigurable_order_protocol;
@@ -49,7 +50,7 @@ pub trait OrderingProtocol<D, NT>: OrderProtocolTolerance + Orderable where D: A
         Self: Sized;
 
     /// Handle a protocol message that was received while we are executing another protocol
-    fn handle_off_ctx_message(&mut self, message: StoredMessage<ProtocolMessage<D, Self::Serialization>>);
+    fn handle_off_ctx_message(&mut self, message: ShareableConsensusMessage<D, Self::Serialization>);
 
     /// Handle the protocol being executed having changed (for example to the state transfer protocol)
     /// This is important for some of the protocols, which need to know when they are being executed or not
@@ -63,7 +64,7 @@ pub trait OrderingProtocol<D, NT>: OrderProtocolTolerance + Orderable where D: A
 
     /// Process a protocol message that we have received
     /// This can be a message received from the poll() method or a message received from other replicas.
-    fn process_message(&mut self, message: StoredMessage<ProtocolMessage<D, Self::Serialization>>)
+    fn process_message(&mut self, message: ShareableConsensusMessage<D, Self::Serialization>)
                        -> Result<OPExecResult<DecisionMetadata<D, Self::Serialization>, ProtocolMessage<D, Self::Serialization>, D::Request>>;
 
     /// Install a given sequence number
@@ -105,7 +106,7 @@ pub enum DecisionInfo<MD, P, O> {
     // The decision metadata, does not indicate that the decision is made
     DecisionMetadata(MD),
     // Partial information about the decision (composing messages)
-    PartialDecisionInformation(MaybeVec<StoredMessage<P>>),
+    PartialDecisionInformation(MaybeVec<ShareableMessage<P>>),
     // The decision has been completed
     DecisionDone(ProtocolConsensusDecision<O>),
 }
@@ -122,7 +123,7 @@ pub struct JoinInfo {
 pub enum OPPollResult<MD, P, D> {
     RunCst,
     ReceiveMsg,
-    Exec(StoredMessage<P>),
+    Exec(ShareableMessage<P>),
     Decided(MaybeVec<Decision<MD, P, D>>),
     QuorumJoined(Option<MaybeVec<Decision<MD, P, D>>>, JoinInfo),
     RePoll,
@@ -135,6 +136,8 @@ pub enum OPExecResult<MD, P, D> {
     MessageDropped,
     /// The message we have passed onto the order protocol was queued for later use
     MessageQueued,
+    /// The input was processed but there are no new updates to take from it
+    MessageProcessedNoUpdate,
     /// The given decisions have been progressed (containing the progress information)
     ProgressedDecision(MaybeVec<Decision<MD, P, D>>),
     /// The given decisions have been decided
@@ -144,6 +147,8 @@ pub enum OPExecResult<MD, P, D> {
     /// The order protocol requires the protocol to update its state to be inline with
     /// the rest of replicas in the system
     RunCst,
+    //TODO: clear the deciding log from a seq number onwards in order to handle
+    // view changes or such protocols
 }
 
 /// Information reported after a logging operation.
@@ -176,7 +181,7 @@ pub struct ProtocolConsensusDecision<O> {
 
 impl<MD, P, O> Decision<MD, P, O> {
     /// Create a decision information object from a stored message
-    pub fn decision_info_from_message(seq: SeqNo, decision: StoredMessage<Protocol<P>>) -> Self {
+    pub fn decision_info_from_message(seq: SeqNo, decision: ShareableMessage<P>) -> Self {
         Decision {
             seq,
             decision_info: MaybeVec::One(DecisionInfo::PartialDecisionInformation(MaybeVec::One(decision))),
@@ -192,7 +197,7 @@ impl<MD, P, O> Decision<MD, P, O> {
     }
 
     /// Create a decision information object from a group of messages
-    pub fn decision_info_from_messages(seq: SeqNo, messages: Vec<StoredMessage<Protocol<P>>>) -> Self {
+    pub fn decision_info_from_messages(seq: SeqNo, messages: Vec<ShareableMessage<P>>) -> Self {
         Decision {
             seq,
             decision_info: MaybeVec::One(DecisionInfo::PartialDecisionInformation(MaybeVec::Vec(messages))),
@@ -209,7 +214,7 @@ impl<MD, P, O> Decision<MD, P, O> {
 
     /// Create a full decision info, from all of the components
     pub fn full_decision_info(seq: SeqNo, metadata: MD,
-                              messages: Vec<StoredMessage<Protocol<P>>>,
+                              messages: Vec<ShareableMessage<P>>,
                               requests: ProtocolConsensusDecision<O>) -> Self {
         let mut decision_info = Vec::with_capacity(3);
 

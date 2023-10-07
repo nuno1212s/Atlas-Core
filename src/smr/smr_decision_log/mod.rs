@@ -18,7 +18,8 @@ use crate::smr::networking::serialize::DecisionLogMessage;
 
 pub type DecLog<D, OP, POP, LS> = <LS as DecisionLogMessage<D, OP, POP>>::DecLog;
 
-pub type StoredConsensusMessage<D, OP> = Arc<ReadOnly<StoredMessage<<OP as OrderingProtocolMessage<D>>::ProtocolMessage>>>;
+pub type ShareableConsensusMessage<D, OP> = Arc<ReadOnly<StoredMessage<<OP as OrderingProtocolMessage<D>>::ProtocolMessage>>>;
+pub type ShareableMessage<P> = Arc<ReadOnly<StoredMessage<P>>>;
 
 /// The record of the decision that has been made.
 pub struct LoggedDecision<O> {
@@ -132,7 +133,7 @@ pub trait DecisionLog<D, OP, NT, PL>: Orderable where D: ApplicationData,
 }
 
 /// Wrap a loggable message
-pub fn wrap_loggable_message<D, OP, POP>(message: StoredMessage<ProtocolMessage<D, OP>>) -> StoredConsensusMessage<D, OP> {
+pub fn wrap_loggable_message<D, OP, POP>(message: StoredMessage<ProtocolMessage<D, OP>>) -> ShareableConsensusMessage<D, OP> {
     Arc::new(ReadOnly::new(message))
 }
 
@@ -179,7 +180,7 @@ impl LoggingDecision {
         Self::Proof(seq)
     }
 
-    pub fn insert_message<D, OP>(&mut self, message: &StoredConsensusMessage<D, OP>) {
+    pub fn insert_message<D, OP>(&mut self, message: &ShareableConsensusMessage<D, OP>) {
         match self {
             LoggingDecision::PartialDecision(_, messages) => {
                 messages.push((message.header().from(), message.header().digest().clone()))
