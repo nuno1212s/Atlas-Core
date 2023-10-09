@@ -30,6 +30,7 @@ pub trait DivisibleStateTransfer<S, NT, PL>: StateTransferProtocol<S, NT, PL>
     fn handle_state_part_received_from_app<V>(&mut self, view: V, parts: Vec<S::StatePart>)
                                               -> Result<()> where V: NetworkView;
 
+    /// Handle the state being finished
     fn handle_state_finished_reception<V>(&mut self, view: V)
                                           -> Result<()> where V: NetworkView;
 

@@ -16,6 +16,7 @@ use crate::messages::{ClientRqInfo, Protocol};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
 use crate::persistent_log::OrderingProtocolLog;
 use crate::request_pre_processing::{BatchOutput, RequestPreProcessor};
+use crate::smr::smr_decision_log::{ShareableConsensusMessage, ShareableMessage};
 use crate::timeouts::{RqTimeout, Timeouts};
 
 pub mod reconfigurable_order_protocol;
@@ -49,7 +50,7 @@ pub trait OrderingProtocol<D, NT>: OrderProtocolTolerance + Orderable where D: A
         Self: Sized;
 
     /// Handle a protocol message that was received while we are executing another protocol
-    fn handle_off_ctx_message(&mut self, message: StoredMessage<ProtocolMessage<D, Self::Serialization>>);
+    fn handle_off_ctx_message(&mut self, message: ShareableConsensusMessage<D, Self::Serialization>);
 
     /// Handle the protocol being executed having changed (for example to the state transfer protocol)
     /// This is important for some of the protocols, which need to know when they are being executed or not
@@ -63,7 +64,7 @@ pub trait OrderingProtocol<D, NT>: OrderProtocolTolerance + Orderable where D: A
 
     /// Process a protocol message that we have received
     /// This can be a message received from the poll() method or a message received from other replicas.
-    fn process_message(&mut self, message: StoredMessage<ProtocolMessage<D, Self::Serialization>>)
+    fn process_message(&mut self, message: ShareableConsensusMessage<D, Self::Serialization>)
                        -> Result<OPExecResult<DecisionMetadata<D, Self::Serialization>, ProtocolMessage<D, Self::Serialization>, D::Request>>;
 
     /// Install a given sequence number
@@ -99,15 +100,15 @@ pub struct Decision<MD, P, O> {
     decision_info: MaybeVec<DecisionInfo<MD, P, O>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialOrd, Ord)]
 /// Information about a given decision
 pub enum DecisionInfo<MD, P, O> {
     // The decision metadata, does not indicate that the decision is made
     DecisionMetadata(MD),
     // Partial information about the decision (composing messages)
-    PartialDecisionInformation(MaybeVec<StoredMessage<P>>),
+    PartialDecisionInformation(MaybeVec<ShareableMessage<P>>),
     // The decision has been completed
-    DecisionDone(UpdateBatch<O>),
+    DecisionDone(ProtocolConsensusDecision<O>),
 }
 
 #[derive(Debug)]
@@ -117,33 +118,26 @@ pub struct JoinInfo {
     new_quorum: Vec<NodeId>,
 }
 
-#[derive(Debug)]
-/// result from polling the ordering protocol
-pub enum OrderProtocolPoll<P, O> {
-    RunCst,
-    ReceiveFromReplicas,
-    Exec(StoredMessage<P>),
-    Decided(Vec<ProtocolConsensusDecision<O>>),
-    QuorumJoined(Option<Vec<ProtocolConsensusDecision<O>>>, NodeId, Vec<NodeId>),
-    RePoll,
-}
-
+/// The return enum of polling the ordering protocol
 #[derive(Debug)]
 pub enum OPPollResult<MD, P, D> {
     RunCst,
     ReceiveMsg,
-    Exec(StoredMessage<P>),
+    Exec(ShareableMessage<P>),
     Decided(MaybeVec<Decision<MD, P, D>>),
     QuorumJoined(Option<MaybeVec<Decision<MD, P, D>>>, JoinInfo),
     RePoll,
 }
 
+#[derive(Debug)]
 /// The result of the ordering protocol executing a message
 pub enum OPExecResult<MD, P, D> {
     /// The message we have passed onto the order protocol was dropped
     MessageDropped,
     /// The message we have passed onto the order protocol was queued for later use
     MessageQueued,
+    /// The input was processed but there are no new updates to take from it
+    MessageProcessedNoUpdate,
     /// The given decisions have been progressed (containing the progress information)
     ProgressedDecision(MaybeVec<Decision<MD, P, D>>),
     /// The given decisions have been decided
@@ -153,6 +147,8 @@ pub enum OPExecResult<MD, P, D> {
     /// The order protocol requires the protocol to update its state to be inline with
     /// the rest of replicas in the system
     RunCst,
+    //TODO: clear the deciding log from a seq number onwards in order to handle
+    // view changes or such protocols
 }
 
 /// Information reported after a logging operation.
@@ -174,29 +170,18 @@ pub enum ExecutionResult {
 /// via a complete proof which means this will be [None] or we can process a batch normally, which means
 /// this will be [Some(CompletedBatch<D>)])
 pub struct ProtocolConsensusDecision<O> {
-    /// The sequence number of the batch
     seq: SeqNo,
-
-    /// The consensus decision
-    executable_batch: UpdateBatch<O>,
-}
-
-/// Information about the completed batch,
-/// when the batch was completed locally
-#[derive(Debug)]
-pub struct DecisionInformation {
     // The digest of the batch
     batch_digest: Digest,
-    // The messages that must be persisted in order for this batch to be considered
-    // persisted and ready to be executed
-    messages_persisted: Vec<Digest>,
-    // The information about all contained requests
-    client_requests: Vec<ClientRqInfo>,
+    // The client requests information contained in the batch.
+    contained_requests: Vec<ClientRqInfo>,
+    // The batch of client requests to execute as a result of this protocol
+    executable_batch: UpdateBatch<O>,
 }
 
 impl<MD, P, O> Decision<MD, P, O> {
     /// Create a decision information object from a stored message
-    pub fn decision_info_from_message(seq: SeqNo, decision: StoredMessage<Protocol<P>>) -> Self {
+    pub fn decision_info_from_message(seq: SeqNo, decision: ShareableMessage<P>) -> Self {
         Decision {
             seq,
             decision_info: MaybeVec::One(DecisionInfo::PartialDecisionInformation(MaybeVec::One(decision))),
@@ -212,7 +197,7 @@ impl<MD, P, O> Decision<MD, P, O> {
     }
 
     /// Create a decision information object from a group of messages
-    pub fn decision_info_from_messages(seq: SeqNo, messages: Vec<StoredMessage<Protocol<P>>>) -> Self {
+    pub fn decision_info_from_messages(seq: SeqNo, messages: Vec<ShareableMessage<P>>) -> Self {
         Decision {
             seq,
             decision_info: MaybeVec::One(DecisionInfo::PartialDecisionInformation(MaybeVec::Vec(messages))),
@@ -220,7 +205,7 @@ impl<MD, P, O> Decision<MD, P, O> {
     }
 
     /// Create a decision done object
-    pub fn completed_decision(seq: SeqNo, update: UpdateBatch<O>) -> Self {
+    pub fn completed_decision(seq: SeqNo, update: ProtocolConsensusDecision<O>) -> Self {
         Decision {
             seq,
             decision_info: MaybeVec::One(DecisionInfo::DecisionDone(update)),
@@ -229,8 +214,8 @@ impl<MD, P, O> Decision<MD, P, O> {
 
     /// Create a full decision info, from all of the components
     pub fn full_decision_info(seq: SeqNo, metadata: MD,
-                              messages: Vec<StoredMessage<Protocol<P>>>,
-                              requests: UpdateBatch<O>) -> Self {
+                              messages: Vec<ShareableMessage<P>>,
+                              requests: ProtocolConsensusDecision<O>) -> Self {
         let mut decision_info = Vec::with_capacity(3);
 
         decision_info.push(DecisionInfo::DecisionMetadata(metadata));
@@ -252,7 +237,35 @@ impl<MD, P, O> Decision<MD, P, O> {
     }
 }
 
+impl<MD, P, O> Orderable for Decision<MD, P, O> {
+    fn sequence_number(&self) -> SeqNo {
+        self.seq
+    }
+}
+
+impl<MD, P, O> DecisionInfo<MD, P, O> {
+    
+    pub fn decision_info_from_message(message: MaybeVec<ShareableMessage<P>>) -> MaybeVec<Self> {
+        MaybeVec::from_one(Self::PartialDecisionInformation(message))
+    }
+    
+    pub fn decision_info_from_message_and_metadata(message: MaybeVec<ShareableMessage<P>>, metadata: MD) -> MaybeVec<Self> {
+        let partial = Self::PartialDecisionInformation(message);
+        let metadata = Self::DecisionMetadata(metadata);
+        
+        MaybeVec::Vec(vec![partial, metadata])
+    }
+    
+}
+
 impl JoinInfo {
+    pub fn new(joined: NodeId, current_quorum: Vec<NodeId>) -> Self{
+        Self {
+            node: joined,
+            new_quorum: current_quorum,
+        }
+    }
+
     pub fn into_inner(self) -> (NodeId, Vec<NodeId>) {
         (self.node, self.new_quorum)
     }
@@ -264,26 +277,26 @@ impl<MD, P, D> Orderable for Decision<MD, P, D> {
     }
 }
 
-impl<P, O> Debug for OrderProtocolPoll<P, O> where P: Debug {
+impl<MD, P, D> Debug for OPPollResult<MD, P, D> where P: Debug {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            OrderProtocolPoll::RunCst => {
+            OPPollResult::RunCst => {
                 write!(f, "RunCst")
             }
-            OrderProtocolPoll::ReceiveFromReplicas => {
+            OPPollResult::ReceiveMsg => {
                 write!(f, "Receive From Replicas")
             }
-            OrderProtocolPoll::Exec(message) => {
+            OPPollResult::Exec(message) => {
                 write!(f, "Exec message {:?}", message.message())
             }
-            OrderProtocolPoll::RePoll => {
+            OPPollResult::RePoll => {
                 write!(f, "RePoll")
             }
-            OrderProtocolPoll::Decided(rqs) => {
+            OPPollResult::Decided(rqs) => {
                 write!(f, "{} committed decisions", rqs.len())
             }
-            OrderProtocolPoll::QuorumJoined(decs, node, quorum) => {
-                write!(f, "{:?} Joined Quorum. Current: {:?}. {} decisions", node, quorum, decs.as_ref().map(|d| d.len()).unwrap_or(0))
+            OPPollResult::QuorumJoined(decs, node) => {
+                write!(f, "Join information: {:?}. Contained Decisions {}", node, decs.map(|dec| dec.len()).unwrap_or(0))
             }
         }
     }
@@ -293,20 +306,18 @@ impl<P, O> Debug for OrderProtocolPoll<P, O> where P: Debug {
 impl<O> ProtocolConsensusDecision<O> {
     pub fn new(seq: SeqNo,
                executable_batch: UpdateBatch<O>,
-               batch_info: Option<DecisionInformation>) -> Self {
+               client_rqs: Vec<ClientRqInfo>,
+               batch_digest: Digest) -> Self {
         ProtocolConsensusDecision {
             seq,
+            batch_digest,
+            contained_requests: client_rqs,
             executable_batch,
-            batch_info,
         }
     }
 
-    pub fn batch_info(&self) -> &Option<DecisionInformation> {
-        &self.batch_info
-    }
-
-    pub fn into(self) -> (SeqNo, UpdateBatch<O>, Option<DecisionInformation>) {
-        (self.seq, self.executable_batch, self.batch_info)
+    pub fn into(self) -> (SeqNo, UpdateBatch<O>, Vec<ClientRqInfo>, Digest) {
+        (self.seq, self.executable_batch, self.contained_requests, self.batch_digest)
     }
 
     pub fn update_batch(&self) -> &UpdateBatch<O> {
@@ -314,31 +325,14 @@ impl<O> ProtocolConsensusDecision<O> {
     }
 }
 
-/// Constructor for the DecisionInformation struct
-impl DecisionInformation {
-    pub fn new(batch_digest: Digest, messages_persisted: Vec<Digest>, client_requests: Vec<ClientRqInfo>) -> Self {
-        DecisionInformation {
-            batch_digest,
-            messages_persisted,
-            client_requests,
-        }
-    }
-
-    pub fn batch_digest(&self) -> &Digest {
-        &self.batch_digest
-    }
-
-    pub fn messages_persisted(&self) -> &Vec<Digest> {
-        &self.messages_persisted
-    }
-
-    pub fn client_requests(&self) -> &Vec<ClientRqInfo> {
-        &self.client_requests
+impl<O> Orderable for ProtocolConsensusDecision<O> {
+    fn sequence_number(&self) -> SeqNo {
+        self.seq
     }
 }
 
 impl<O> Debug for ProtocolConsensusDecision<O> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ProtocolConsensusDecision {{ seq: {:?}, executable_batch: {:?}, batch_info: {:?} }}", self.seq, self.executable_batch.len(), self.batch_info)
+        write!(f, "ProtocolConsensusDecision {{ seq: {:?}, executable_batch: {:?}, batch_info: {:?} }}", self.seq, self.executable_batch.len(), self.batch_digest)
     }
 }
