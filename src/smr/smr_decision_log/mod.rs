@@ -98,8 +98,7 @@ pub trait DecisionLog<D, OP, NT, PL>: Orderable where D: ApplicationData,
     /// Install a log received from other replicas in the system
     /// returns a list of all requests that should then be executed by the application.
     /// as well as the last execution contained in the sequence number
-    fn install_log(&mut self, order_protocol: &mut OP,
-                   dec_log: DecLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>)
+    fn install_log(&mut self, dec_log: DecLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>)
                    -> Result<MaybeVec<LoggedDecision<D::Request>>>
         where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>;
 

@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fmt::{Debug, Formatter};
 use std::iter;
 use std::sync::Arc;
@@ -5,6 +6,7 @@ use std::sync::Arc;
 use atlas_common::crypto::hash::Digest;
 use atlas_common::error::*;
 use atlas_common::maybe_vec::MaybeVec;
+use atlas_common::maybe_vec::ordered::{MaybeOrderedVec, MaybeOrderedVecBuilder};
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::StoredMessage;
@@ -22,6 +24,7 @@ use crate::timeouts::{RqTimeout, Timeouts};
 pub mod reconfigurable_order_protocol;
 pub mod loggable;
 pub mod networking;
+pub mod permissioned;
 
 pub type View<POP: PermissionedOrderingProtocolMessage> = <POP as PermissionedOrderingProtocolMessage>::ViewInfo;
 
@@ -97,10 +100,12 @@ pub struct Decision<MD, P, O> {
     // Information about the decision progression.
     // Multiple instances can be bundled here in case we want to include various updates to
     // The same decision
-    decision_info: MaybeVec<DecisionInfo<MD, P, O>>,
+    // This has to be in an ordered state as it is very important that the decision done
+    // Enum always needs to be the last one delivered in order to even make sense
+    decision_info: MaybeOrderedVec<DecisionInfo<MD, P, O>>,
 }
 
-#[derive(Debug, PartialOrd, Ord)]
+#[derive(Debug, PartialOrd, Ord, PartialEq)]
 /// Information about a given decision
 pub enum DecisionInfo<MD, P, O> {
     // The decision metadata, does not indicate that the decision is made
@@ -121,12 +126,28 @@ pub struct JoinInfo {
 /// The return enum of polling the ordering protocol
 #[derive(Debug)]
 pub enum OPPollResult<MD, P, D> {
+    /// The order protocol requires the protocol to update its state to be inline with
+    /// the rest of replicas in the system
     RunCst,
+    /// The ordering protocol requires reception of messages from other nodes in order
+    /// to progress
     ReceiveMsg,
+    /// The order protocol had a message stored that was received out of order
+    /// but is now ready to be processed
     Exec(ShareableMessage<P>),
-    Decided(MaybeVec<Decision<MD, P, D>>),
-    QuorumJoined(Option<MaybeVec<Decision<MD, P, D>>>, JoinInfo),
+    /// The ordered protocol progressed a decision as a result of the poll operation
+    ProgressedDecision(DecisionsAhead, MaybeVec<Decision<MD, P, D>>),
+    /// The quorum was joined as a result of the poll operation
+    QuorumJoined(DecisionsAhead, Option<MaybeVec<Decision<MD, P, D>>>, JoinInfo),
+    /// The order protocol wants to be polled again, for some particular reason
     RePoll,
+}
+
+/// What should be the action on the decisions that are not yet decided
+///
+pub enum DecisionsAhead {
+    Ignore,
+    ClearAhead
 }
 
 #[derive(Debug)]
@@ -139,11 +160,10 @@ pub enum OPExecResult<MD, P, D> {
     /// The input was processed but there are no new updates to take from it
     MessageProcessedNoUpdate,
     /// The given decisions have been progressed (containing the progress information)
-    ProgressedDecision(MaybeVec<Decision<MD, P, D>>),
-    /// The given decisions have been decided
-    Decided(MaybeVec<Decision<MD, P, D>>),
-    /// The quorum has been joined by a given node
-    QuorumJoined(Option<MaybeVec<Decision<MD, P, D>>>, JoinInfo),
+    ProgressedDecision(DecisionsAhead, MaybeVec<Decision<MD, P, D>>),
+    /// The quorum has been joined by a given node.
+    /// Do we want this to also clear the upcoming decisions?
+    QuorumJoined(DecisionsAhead, Option<MaybeVec<Decision<MD, P, D>>>, JoinInfo),
     /// The order protocol requires the protocol to update its state to be inline with
     /// the rest of replicas in the system
     RunCst,
@@ -184,7 +204,7 @@ impl<MD, P, O> Decision<MD, P, O> {
     pub fn decision_info_from_message(seq: SeqNo, decision: ShareableMessage<P>) -> Self {
         Decision {
             seq,
-            decision_info: MaybeVec::One(DecisionInfo::PartialDecisionInformation(MaybeVec::One(decision))),
+            decision_info: MaybeOrderedVec::One(DecisionInfo::PartialDecisionInformation(MaybeVec::One(decision))),
         }
     }
 
@@ -192,7 +212,7 @@ impl<MD, P, O> Decision<MD, P, O> {
     pub fn decision_info_from_metadata(seq: SeqNo, metadata: MD) -> Self {
         Decision {
             seq,
-            decision_info: MaybeVec::One(DecisionInfo::DecisionMetadata(metadata)),
+            decision_info: MaybeOrderedVec::One(DecisionInfo::DecisionMetadata(metadata)),
         }
     }
 
@@ -200,7 +220,7 @@ impl<MD, P, O> Decision<MD, P, O> {
     pub fn decision_info_from_messages(seq: SeqNo, messages: Vec<ShareableMessage<P>>) -> Self {
         Decision {
             seq,
-            decision_info: MaybeVec::One(DecisionInfo::PartialDecisionInformation(MaybeVec::Vec(messages))),
+            decision_info: MaybeOrderedVec::One(DecisionInfo::PartialDecisionInformation(MaybeVec::Mult(messages))),
         }
     }
 
@@ -208,7 +228,7 @@ impl<MD, P, O> Decision<MD, P, O> {
     pub fn completed_decision(seq: SeqNo, update: ProtocolConsensusDecision<O>) -> Self {
         Decision {
             seq,
-            decision_info: MaybeVec::One(DecisionInfo::DecisionDone(update)),
+            decision_info: MaybeOrderedVec::One(DecisionInfo::DecisionDone(update)),
         }
     }
 
@@ -216,23 +236,58 @@ impl<MD, P, O> Decision<MD, P, O> {
     pub fn full_decision_info(seq: SeqNo, metadata: MD,
                               messages: Vec<ShareableMessage<P>>,
                               requests: ProtocolConsensusDecision<O>) -> Self {
-        let mut decision_info = Vec::with_capacity(3);
+        let mut decision_info = BTreeSet::new();
 
-        decision_info.push(DecisionInfo::DecisionMetadata(metadata));
-        decision_info.push(DecisionInfo::PartialDecisionInformation(MaybeVec::Vec(messages)));
-        decision_info.push(DecisionInfo::DecisionDone(requests));
+        decision_info.insert(DecisionInfo::DecisionMetadata(metadata));
+        decision_info.insert(DecisionInfo::PartialDecisionInformation(MaybeVec::Mult(messages)));
+        decision_info.insert(DecisionInfo::DecisionDone(requests));
 
         Decision {
             seq,
-            decision_info: MaybeVec::Vec(decision_info),
+            decision_info: MaybeOrderedVec::from_set(decision_info),
         }
     }
 
-    pub fn decision_info(&self) -> &MaybeVec<DecisionInfo<MD, P, O>> {
+    /// Merge two decisions by appending one to the other
+    /// Returns an error when the sequence number of the decisions does not match
+    pub fn merge_decisions(&mut self, other: Self) -> Result<()> {
+        if self.seq != other.seq {
+            return Err(Error::simple_with_msg(ErrorKind::OrderProtocolDecision,
+                                              "The decisions have different sequence numbers, cannot merge"));
+        }
+
+        let mut ordered_vec_builder = MaybeOrderedVecBuilder::from_existing(other.decision_info);
+
+        self.decision_info = {
+            let decisions = std::mem::replace(&mut self.decision_info, MaybeOrderedVec::None);
+
+            for dec_info in decisions.into_iter() {
+                ordered_vec_builder.push(dec_info);
+            }
+
+            ordered_vec_builder.build()
+        };
+
+        Ok(())
+    }
+
+    pub fn append_decision_info(&mut self, decision_info: DecisionInfo<MD, P, O>) {
+        self.decision_info = {
+            let decisions = std::mem::replace(&mut self.decision_info, MaybeOrderedVec::None);
+
+            let mut decisions = MaybeOrderedVecBuilder::from_existing(decisions);
+
+            decisions.push(decision_info);
+
+            decisions.build()
+        };
+    }
+
+    pub fn decision_info(&self) -> &MaybeOrderedVec<DecisionInfo<MD, P, O>> {
         &self.decision_info
     }
 
-    pub fn into_decision_info(self) -> MaybeVec<DecisionInfo<MD, P, O>> {
+    pub fn into_decision_info(self) -> MaybeOrderedVec<DecisionInfo<MD, P, O>> {
         self.decision_info
     }
 }
@@ -244,22 +299,20 @@ impl<MD, P, O> Orderable for Decision<MD, P, O> {
 }
 
 impl<MD, P, O> DecisionInfo<MD, P, O> {
-    
     pub fn decision_info_from_message(message: MaybeVec<ShareableMessage<P>>) -> MaybeVec<Self> {
         MaybeVec::from_one(Self::PartialDecisionInformation(message))
     }
-    
+
     pub fn decision_info_from_message_and_metadata(message: MaybeVec<ShareableMessage<P>>, metadata: MD) -> MaybeVec<Self> {
         let partial = Self::PartialDecisionInformation(message);
         let metadata = Self::DecisionMetadata(metadata);
-        
-        MaybeVec::Vec(vec![partial, metadata])
+
+        MaybeVec::Mult(vec![partial, metadata])
     }
-    
 }
 
 impl JoinInfo {
-    pub fn new(joined: NodeId, current_quorum: Vec<NodeId>) -> Self{
+    pub fn new(joined: NodeId, current_quorum: Vec<NodeId>) -> Self {
         Self {
             node: joined,
             new_quorum: current_quorum,
@@ -292,7 +345,7 @@ impl<MD, P, D> Debug for OPPollResult<MD, P, D> where P: Debug {
             OPPollResult::RePoll => {
                 write!(f, "RePoll")
             }
-            OPPollResult::Decided(rqs) => {
+            OPPollResult::ProgressedDecision(rqs) => {
                 write!(f, "{} committed decisions", rqs.len())
             }
             OPPollResult::QuorumJoined(decs, node) => {

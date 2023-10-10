@@ -11,7 +11,7 @@ use atlas_smr_application::serialize::ApplicationData;
 use crate::messages::{ClientRqInfo, StoredRequestMessage};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, OrderProtocolProof};
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
-use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol, ProtocolMessage};
+use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol, ProtocolConsensusDecision, ProtocolMessage};
 use crate::smr::smr_decision_log::ShareableConsensusMessage;
 
 /// The trait definining the necessary data types for the ordering protocol to be used
@@ -40,7 +40,8 @@ pub type PProof<D, OP, POP> = <POP as PersistentOrderProtocolTypes<D, OP>>::Proo
 
 /// The trait to define the necessary methods and data types for this order protocol
 /// to be compatible with the decision log
-pub trait LoggableOrderProtocol<D, NT>: OrderingProtocol<D, NT> where D: ApplicationData {
+pub trait LoggableOrderProtocol<D, NT>: OrderingProtocol<D, NT>
+    where D: ApplicationData, {
     /// The required data types for working with the decision log
     type PersistableTypes: PersistentOrderProtocolTypes<D, Self::Serialization>;
 
@@ -67,6 +68,7 @@ pub trait LoggableOrderProtocol<D, NT>: OrderingProtocol<D, NT> where D: Applica
                        -> (&DecisionMetadata<D, Self::Serialization>,
                            Vec<&StoredMessage<ProtocolMessage<D, Self::Serialization>>>);
 
+    /// Extract the proof out of the protocol decision proof
     fn get_requests_in_proof(proof: &PProof<D, Self::Serialization, Self::PersistableTypes>)
-                             -> (UpdateBatch<D::Request>, Vec<ClientRqInfo>);
+                             -> Result<ProtocolConsensusDecision<D::Request>>;
 }
