@@ -22,6 +22,16 @@ pub trait OrderProtocolLogPart: Orderable {
 }
 
 pub trait DecisionLogMessage<D, OPM, POP> {
+
+    /// A metadata type to allow for decision logs to include some
+    /// more specific information into their decision log, apart from
+    /// the list of proofs
+    #[cfg(feature = "serialize_capnp")]
+    type DecLogMetadata: Send + Clone;
+
+    #[cfg(feature = "serialize_serde")]
+    type DecLogMetadata: for<'a> Deserialize<'a> + Serialize + Send + Clone;
+
     /// A type that defines the log of decisions made since the last garbage collection
     /// (In the case of BFT SMR the log is GCed after a checkpoint of the application)
     #[cfg(feature = "serialize_capnp")]

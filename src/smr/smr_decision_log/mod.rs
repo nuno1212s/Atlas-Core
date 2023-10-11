@@ -11,12 +11,14 @@ use atlas_smr_application::app::UpdateBatch;
 use atlas_smr_application::ExecutorHandle;
 use crate::messages::{ClientRqInfo, StoredRequestMessage};
 use crate::ordering_protocol::{Decision, DecisionMetadata, OrderingProtocol, ProtocolMessage};
-use crate::ordering_protocol::loggable::{LoggableOrderProtocol, PersistentOrderProtocolTypes, PProof};
+use crate::ordering_protocol::loggable::{LoggableOrderProtocol, OrderProtocolPersistenceHelper, PersistentOrderProtocolTypes, PProof};
 use crate::ordering_protocol::networking::serialize::OrderingProtocolMessage;
 use crate::persistent_log::PersistentDecisionLog;
 use crate::smr::networking::serialize::DecisionLogMessage;
 
 pub type DecLog<D, OP, POP, LS> = <LS as DecisionLogMessage<D, OP, POP>>::DecLog;
+pub type DecLogMetadata<D, OP, POP, LS> = <LS as DecisionLogMessage<D, OP, POP>>::DecLogMetadata;
+pub type DecLogPart<D, OP, POP, LS> = <LS as DecisionLogMessage<D, OP, POP>>::DecLogPart;
 
 pub type ShareableConsensusMessage<D, OP> = Arc<ReadOnly<StoredMessage<<OP as OrderingProtocolMessage<D>>::ProtocolMessage>>>;
 pub type ShareableMessage<P> = Arc<ReadOnly<StoredMessage<P>>>;
@@ -98,8 +100,7 @@ pub trait DecisionLog<D, OP, NT, PL>: Orderable where D: ApplicationData,
     /// Install a log received from other replicas in the system
     /// returns a list of all requests that should then be executed by the application.
     /// as well as the last execution contained in the sequence number
-    fn install_log(&mut self, order_protocol: &mut OP,
-                   dec_log: DecLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>)
+    fn install_log(&mut self, dec_log: DecLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>)
                    -> Result<MaybeVec<LoggedDecision<D::Request>>>
         where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>;
 
@@ -137,8 +138,6 @@ pub fn wrap_loggable_message<D, OP, POP>(message: StoredMessage<ProtocolMessage<
     Arc::new(ReadOnly::new(message))
 }
 
-pub type DecLogPart<D, OP, POP, LS> = <LS as DecisionLogMessage<D, OP, POP>>::DecLogPart;
-
 pub trait PartiallyWriteableDecLog<D, OP, NT, PL>: DecisionLog<D, OP, NT, PL>
     where D: ApplicationData, OP: LoggableOrderProtocol<D, NT> {
     fn start_installing_log(&mut self) -> Result<()>
@@ -147,6 +146,21 @@ pub trait PartiallyWriteableDecLog<D, OP, NT, PL>: DecisionLog<D, OP, NT, PL>
     fn install_log_part(&mut self, log_part: DecLogPart<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>) -> Result<()>;
 
     fn complete_log_install(&mut self) -> Result<()>;
+}
+
+/// Persistence helper for the decision log
+pub trait DecisionLogPersistenceHelper<D, OPM, POP, LS>
+    where D: ApplicationData,
+          OPM: OrderingProtocolMessage<D>,
+          POP: PersistentOrderProtocolTypes<D, OPM>,
+          LS: DecisionLogMessage<D, OPM, POP> {
+
+    /// Initialize the decision log
+    fn init_decision_log(metadata: DecLogMetadata<D, OPM, POP, LS>, proofs: Vec<PProof<D, OPM, POP>>) -> DecLog<D, OPM, POP, LS>;
+
+    /// Take a decision log and decompose it into parts in order to store them more quickly and easily
+    /// This is also so we can support
+    fn decompose_decision_log(dec_log: DecLog<D, OPM, POP, LS>) -> (DecLogMetadata<D, OPM, POP, LS>, Vec<PProof<D, OPM, POP>>);
 }
 
 impl<O> LoggedDecision<O> {

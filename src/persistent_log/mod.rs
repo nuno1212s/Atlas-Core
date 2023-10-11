@@ -75,7 +75,7 @@ pub trait PersistentDecisionLog<D, OPM, POP, DOP>: OrderingProtocolLog<D, OPM>
     fn read_proof(&self, seq: SeqNo) -> Result<Option<PProof<D, OPM, POP>>>;
 
     /// Read the decision log from the persistent storage
-    fn read_decision_log<OPL>(&self, mode: OperationMode) -> Result<Option<DecLog<D, OPM, POP, DOP>>>;
+    fn read_decision_log(&self, mode: OperationMode) -> Result<Option<DecLog<D, OPM, POP, DOP>>>;
 
     /// Reset the decision log on disk
     fn reset_log(&self, mode: OperationMode) -> Result<()>;
