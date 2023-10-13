@@ -13,7 +13,7 @@ use crate::ordering_protocol::{DecisionMetadata, View};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
 use crate::ordering_protocol::loggable::{PersistentOrderProtocolTypes, PProof};
 use crate::smr::networking::serialize::DecisionLogMessage;
-use crate::smr::smr_decision_log::{DecLog, LoggingDecision, ShareableConsensusMessage};
+use crate::smr::smr_decision_log::{DecLog, DecLogMetadata, LoggingDecision, ShareableConsensusMessage};
 use crate::state_transfer::{Checkpoint};
 
 
@@ -59,29 +59,32 @@ pub trait PermissionedOrderingProtocolLog<POP> where POP: PermissionedOrderingPr
 }
 
 /// The trait that defines the the persistent decision log, so that the decision log can be persistent
-pub trait PersistentDecisionLog<D, OPM, POP, DOP>: OrderingProtocolLog<D, OPM>
+pub trait PersistentDecisionLog<D, OPM, POP, LS>: OrderingProtocolLog<D, OPM>
     where D: ApplicationData,
           OPM: OrderingProtocolMessage<D>,
           POP: PersistentOrderProtocolTypes<D, OPM>,
-          DOP: DecisionLogMessage<D, OPM, POP> {
+          LS: DecisionLogMessage<D, OPM, POP> {
 
     /// A checkpoint has been done on the state, so we can clear the current decision log
-    fn checkpoint_received<OPL>(&self, mode: OperationMode, seq: SeqNo);
+    fn checkpoint_received(&self, mode: OperationMode, seq: SeqNo) -> Result<()>;
 
     /// Write a given proof to the persistent log
     fn write_proof(&self, write_mode: OperationMode, proof: PProof<D, OPM, POP>) -> Result<()>;
 
+    /// Write the metadata of a decision into the persistent log
+    fn write_decision_metadata(&self, mode: OperationMode, log_metadata: DecLogMetadata<D, OPM, POP, LS>) -> Result<()>;
+
+    /// Write the decision log into the persistent log
+    fn write_decision_log(&self, mode: OperationMode, log: DecLog<D, OPM, POP, LS>) -> Result<()>;
+
     /// Read a proof from the log with the given sequence number
-    fn read_proof(&self, seq: SeqNo) -> Result<Option<PProof<D, OPM, POP>>>;
+    fn read_proof(&self, mode: OperationMode, seq: SeqNo) -> Result<Option<PProof<D, OPM, POP>>>;
 
     /// Read the decision log from the persistent storage
-    fn read_decision_log(&self, mode: OperationMode) -> Result<Option<DecLog<D, OPM, POP, DOP>>>;
+    fn read_decision_log(&self, mode: OperationMode) -> Result<Option<DecLog<D, OPM, POP, LS>>>;
 
     /// Reset the decision log on disk
     fn reset_log(&self, mode: OperationMode) -> Result<()>;
-
-    /// Write the decision log into the persistent log
-    fn write_decision_log<OPL>(&self, mode: OperationMode, log: DecLog<D, OPM, POP, DOP>) -> Result<()>;
 
     /// Wait for the persistence of a given proof, if necessary
     /// The return of this function is dependent on the current mode of the persistent log.

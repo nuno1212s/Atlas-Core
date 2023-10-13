@@ -12,7 +12,7 @@ use atlas_communication::message::{Header};
 use atlas_communication::message_signing::NetworkMessageSignatureVerifier;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
 use atlas_communication::serialize::{Buf, Serializable};
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 use crate::log_transfer::networking::serialize::LogTransferMessage;
 use crate::log_transfer::networking::signature_ver::LogTransferVerificationHelper;
 
@@ -163,18 +163,10 @@ impl<D> OrderingProtocolMessage<D> for NoProtocol {
 
     type ProtocolMessage = ();
 
-    type LoggableMessage = ();
-
-    type Proof = ();
-
     type ProofMetadata = ();
 
     fn verify_order_protocol_message<NI, OPVH>(network_info: &Arc<NI>, header: &Header, message: Self::ProtocolMessage) -> atlas_common::error::Result<(bool, Self::ProtocolMessage)> where NI: NetworkInformationProvider, OPVH: OrderProtocolSignatureVerificationHelper<D, Self, NI>, D: ApplicationData {
         Ok((false, message))
-    }
-
-    fn verify_proof<NI, OPVH>(network_info: &Arc<NI>, proof: Self::Proof) -> atlas_common::error::Result<(bool, Self::Proof)> where NI: NetworkInformationProvider, OPVH: OrderProtocolSignatureVerificationHelper<D, Self, NI>, D: ApplicationData, Self: Sized {
-        Ok((false, proof))
     }
 
     #[cfg(feature = "serialize_capnp")]
@@ -237,4 +229,8 @@ impl<D, P> LogTransferMessage<D, P> for NoProtocol {
     }
 }
 
-impl OrderProtocolProof for () {}
+impl OrderProtocolProof for () {
+    fn contained_messages(&self) -> usize {
+        0
+    }
+}

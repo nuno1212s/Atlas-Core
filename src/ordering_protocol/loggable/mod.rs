@@ -73,8 +73,10 @@ pub type PProof<D, OP, POP> = <POP as PersistentOrderProtocolTypes<D, OP>>::Proo
 
 /// The trait to define the necessary methods and data types for this order protocol
 /// to be compatible with the decision log
-pub trait LoggableOrderProtocol<D, NT>: OrderingProtocol<D, NT> + OrderProtocolPersistenceHelper<D, Self::Serialization, Self::PersistableTypes>
-    where D: ApplicationData {
+pub trait LoggableOrderProtocol<D, NT>: OrderingProtocol<D, NT> +
+OrderProtocolPersistenceHelper<D, Self::Serialization, Self::PersistableTypes>
+    where D: ApplicationData + 'static {
+
     /// The required data types for working with the decision log
     type PersistableTypes: PersistentOrderProtocolTypes<D, Self::Serialization>;
 }

@@ -3,7 +3,7 @@ use atlas_common::node_id::NodeId;
 use atlas_communication::FullNetworkNode;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
 use atlas_communication::serialize::Serializable;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 use crate::log_transfer::networking::serialize::LogTransferMessage;
 
 use crate::messages::{ReplyMessage, SystemMessage};

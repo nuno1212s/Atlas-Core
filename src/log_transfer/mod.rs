@@ -42,8 +42,9 @@ pub enum LTTimeoutResult {
 pub trait LogTransferProtocol<D, OP, DL, NT, PL> where D: ApplicationData + 'static,
                                                        OP: LoggableOrderProtocol<D, NT>,
                                                        DL: DecisionLog<D, OP, NT, PL> + 'static {
+
     /// The type which implements StateTransferMessage, to be implemented by the developer
-    type Serialization: LogTransferMessage<D, OP::Serialization> + 'static;
+    type Serialization: LogTransferMessage<D, OP::Serialization>;
 
     /// The configuration type the protocol wants to accept
     type Config;
@@ -60,7 +61,7 @@ pub trait LogTransferProtocol<D, OP, DL, NT, PL> where D: ApplicationData + 'sta
     /// Handle a state transfer protocol message that was received while executing the ordering protocol
     fn handle_off_ctx_message<V>(&mut self, decision_log: &mut DL,
                                  view: V,
-                                 message: StoredMessage<LogTM<D, OP, Self::Serialization>>)
+                                 message: StoredMessage<LogTM<D, OP::Serialization, Self::Serialization>>)
                                  -> Result<()>
         where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>,
               V: NetworkView;
@@ -68,7 +69,7 @@ pub trait LogTransferProtocol<D, OP, DL, NT, PL> where D: ApplicationData + 'sta
     /// Process a log transfer protocol message, received from other replicas
     ///
     fn process_message<V>(&mut self, decision_log: &mut DL, view: V,
-                          message: StoredMessage<LogTM<D, OP, Self::Serialization>>) -> Result<LTResult<D>>
+                          message: StoredMessage<LogTM<D, OP::Serialization, Self::Serialization>>) -> Result<LTResult<D>>
         where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>,
               V: NetworkView;
 
@@ -92,6 +93,9 @@ impl<D: ApplicationData> Debug for LTResult<D> {
             }
             LTResult::LTPFinished(first, last, _) => {
                 write!(f, "LTPFinished({:?}, {:?})", first, last)
+            }
+            LTResult::InstallSeq(seq) => {
+                write!(f, "LTPInstallSeq({:?})", seq)
             }
         }
     }
