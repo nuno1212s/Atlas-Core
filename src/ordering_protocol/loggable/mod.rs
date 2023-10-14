@@ -61,8 +61,7 @@ pub trait OrderProtocolPersistenceHelper<D, OPM, POP> where D: ApplicationData,
 
     /// Decompose a given proof into it's metadata and messages, ready to be persisted
     fn decompose_proof(proof: &PProof<D, OPM, POP>)
-                       -> (&DecisionMetadata<D, OPM>,
-                           Vec<&StoredMessage<ProtocolMessage<D, OPM>>>);
+                       -> (&DecisionMetadata<D, OPM>, Vec<&StoredMessage<ProtocolMessage<D, OPM>>>);
 
     /// Extract the proof out of the protocol decision proof
     fn get_requests_in_proof(proof: &PProof<D, OPM, POP>)

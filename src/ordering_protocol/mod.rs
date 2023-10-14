@@ -64,8 +64,7 @@ pub trait OrderingProtocol<D, NT>: OrderProtocolTolerance + Orderable
     /// Poll from the ordering protocol in order to know what we should do next
     /// We do this to check if there are already messages waiting to be executed that were received ahead of time and stored.
     /// Or whether we should run state transfer or wait for messages from other replicas
-    fn poll(&mut self) -> OPPollResult<DecisionMetadata<D, Self::Serialization>,
-        ProtocolMessage<D, Self::Serialization>, D::Request>;
+    fn poll(&mut self) -> Result<OPPollResult<DecisionMetadata<D, Self::Serialization>, ProtocolMessage<D, Self::Serialization>, D::Request>>;
 
     /// Process a protocol message that we have received
     /// This can be a message received from the poll() method or a message received from other replicas.
@@ -118,7 +117,7 @@ pub enum DecisionInfo<MD, P, O> {
     DecisionDone(ProtocolConsensusDecision<O>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The information about a node having joined the quorum
 pub struct JoinInfo {
     node: NodeId,
