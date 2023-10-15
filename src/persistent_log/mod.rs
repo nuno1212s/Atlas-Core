@@ -72,7 +72,7 @@ pub trait PersistentDecisionLog<D, OPM, POP, LS>: OrderingProtocolLog<D, OPM>
     fn write_proof(&self, write_mode: OperationMode, proof: PProof<D, OPM, POP>) -> Result<()>;
 
     /// Write the metadata of a decision into the persistent log
-    fn write_decision_metadata(&self, mode: OperationMode, log_metadata: DecLogMetadata<D, OPM, POP, LS>) -> Result<()>;
+    fn write_decision_log_metadata(&self, mode: OperationMode, log_metadata: DecLogMetadata<D, OPM, POP, LS>) -> Result<()>;
 
     /// Write the decision log into the persistent log
     fn write_decision_log(&self, mode: OperationMode, log: DecLog<D, OPM, POP, LS>) -> Result<()>;

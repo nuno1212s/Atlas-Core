@@ -41,7 +41,7 @@ pub enum LTTimeoutResult {
 
 pub trait LogTransferProtocol<D, OP, DL, NT, PL> where D: ApplicationData + 'static,
                                                        OP: LoggableOrderProtocol<D, NT>,
-                                                       DL: DecisionLog<D, OP, NT, PL> + 'static {
+                                                       DL: DecisionLog<D, OP, NT, PL> {
 
     /// The type which implements StateTransferMessage, to be implemented by the developer
     type Serialization: LogTransferMessage<D, OP::Serialization>;

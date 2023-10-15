@@ -16,7 +16,7 @@ use crate::smr::smr_decision_log::ShareableConsensusMessage;
 
 /// The trait definining the necessary data types for the ordering protocol to be used
 /// with the decision log
-pub trait PersistentOrderProtocolTypes<D, OPM> {
+pub trait PersistentOrderProtocolTypes<D, OPM>: Send + Sync {
     /// A proof of a given Sequence number in the consensus protocol
     /// This is used as the type to fully represent the validity of a given SeqNo in the protocol
     /// A proof with SeqNo X should mean that X has been decided correctly

@@ -21,7 +21,7 @@ pub trait OrderProtocolLogPart: Orderable {
     fn last_seq(&self) -> Option<SeqNo>;
 }
 
-pub trait DecisionLogMessage<D, OPM, POP> {
+pub trait DecisionLogMessage<D, OPM, POP>: Send + Sync {
 
     /// A metadata type to allow for decision logs to include some
     /// more specific information into their decision log, apart from
