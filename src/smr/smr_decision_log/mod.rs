@@ -149,7 +149,7 @@ pub trait PartiallyWriteableDecLog<D, OP, NT, PL>: DecisionLog<D, OP, NT, PL>
 }
 
 /// Persistence helper for the decision log
-pub trait DecisionLogPersistenceHelper<D, OPM, POP, LS>
+pub trait DecisionLogPersistenceHelper<D, OPM, POP, LS>: Send
     where D: ApplicationData,
           OPM: OrderingProtocolMessage<D>,
           POP: PersistentOrderProtocolTypes<D, OPM>,
@@ -160,6 +160,9 @@ pub trait DecisionLogPersistenceHelper<D, OPM, POP, LS>
     /// Take a decision log and decompose it into parts in order to store them more quickly and easily
     /// This is also so we can support
     fn decompose_decision_log(dec_log: DecLog<D, OPM, POP, LS>) -> (DecLogMetadata<D, OPM, POP, LS>, Vec<PProof<D, OPM, POP>>);
+
+    /// Decompose a decision log into its parts, but only by references
+    fn decompose_decision_log_ref(dec_log: &DecLog<D, OPM, POP, LS>) -> (&DecLogMetadata<D, OPM, POP, LS>, Vec<&PProof<D, OPM, POP>>);
 }
 
 impl<O> LoggedDecision<O> {

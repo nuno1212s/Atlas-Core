@@ -38,7 +38,7 @@ pub trait PersistentOrderProtocolTypes<D, OPM>: Send + Sync {
 
 /// A trait to create a separation between these helper methods and the rest
 /// of the order protocol so that we don't require generics that are not needed
-pub trait OrderProtocolPersistenceHelper<D, OPM, POP> where D: ApplicationData,
+pub trait OrderProtocolPersistenceHelper<D, OPM, POP>: Send where D: ApplicationData,
                                                             OPM: OrderingProtocolMessage<D>,
                                                             POP: PersistentOrderProtocolTypes<D, OPM> {
     /// The types of messages to be stored. This is used due to the parallelization described above.
