@@ -68,7 +68,7 @@ pub trait OrderingProtocolMessage<D>: Send + Sync {
 
     fn verify_order_protocol_message<NI, OPVH>(network_info: &Arc<NI>,
                                                header: &Header,
-                                               message: Self::ProtocolMessage) -> Result<(bool, Self::ProtocolMessage)>
+                                               message: Self::ProtocolMessage) -> Result<Self::ProtocolMessage>
         where NI: NetworkInformationProvider,
               OPVH: OrderProtocolSignatureVerificationHelper<D, Self, NI>,
               D: ApplicationData, Self: Sized;

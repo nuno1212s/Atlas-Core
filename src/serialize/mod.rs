@@ -56,58 +56,56 @@ impl<D, P, S, L> Serializable for Service<D, P, S, L> where
     D: ApplicationData + 'static, P: OrderingProtocolMessage<D> + 'static, S: StateTransferMessage + 'static, L: LogTransferMessage<D, P> + 'static {
     type Message = SystemMessage<D, P::ProtocolMessage, S::StateTransferMessage, L::LogTransferMessage>;
 
-    fn verify_message_internal<NI, SV>(info_provider: &Arc<NI>, header: &Header, msg: &Self::Message) -> atlas_common::error::Result<bool>
+    fn verify_message_internal<NI, SV>(info_provider: &Arc<NI>, header: &Header, msg: &Self::Message) -> atlas_common::error::Result<()>
         where NI: NetworkInformationProvider + 'static,
               SV: NetworkMessageSignatureVerifier<Self, NI> {
         match msg {
             SystemMessage::ProtocolMessage(protocol) => {
-                let (result, message) = P::verify_order_protocol_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, header, protocol.payload().clone())?;
+                let msg = P::verify_order_protocol_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, header, protocol.payload().clone())?;
 
-                Ok(result)
+                Ok(())
             }
             SystemMessage::LogTransferMessage(log_transfer) => {
-                let (result, message) = L::verify_log_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, header, log_transfer.payload().clone())?;
+                let msg = L::verify_log_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, header, log_transfer.payload().clone())?;
 
-                Ok(result)
+                Ok(())
             }
             SystemMessage::StateTransferMessage(state_transfer) => {
-                let (result, message) = S::verify_state_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, header, state_transfer.payload().clone())?;
+                let msg = S::verify_state_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, header, state_transfer.payload().clone())?;
 
-                Ok(result)
+                Ok(())
             }
             SystemMessage::OrderedRequest(request) => {
-                Ok(true)
+                Ok(())
             }
             SystemMessage::OrderedReply(reply) => {
-                Ok(true)
+                Ok(())
             }
             SystemMessage::UnorderedReply(reply) => {
-                Ok(true)
+                Ok(())
             }
             SystemMessage::UnorderedRequest(request) => {
-                Ok(true)
+                Ok(())
             }
             SystemMessage::ForwardedProtocolMessage(fwd_protocol) => {
                 let header = fwd_protocol.header();
                 let message = fwd_protocol.message();
 
-                let (result, message) = P::verify_order_protocol_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, message.header(), message.message().payload().clone())?;
+                let message = P::verify_order_protocol_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, message.header(), message.message().payload().clone())?;
 
-                Ok(result)
+                Ok(())
             }
             SystemMessage::ForwardedRequestMessage(fwd_requests) => {
-                let mut result = true;
-
                 for stored_rq in fwd_requests.requests().iter() {
                     let header = stored_rq.header();
                     let message = stored_rq.message();
 
                     let message = SystemMessage::OrderedRequest(message.clone());
 
-                    result &= Self::verify_message_internal::<NI, SV>(info_provider, header, &message)?;
+                    Self::verify_message_internal::<NI, SV>(info_provider, header, &message)?;
                 }
 
-                Ok(result)
+                Ok(())
             }
         }
     }
@@ -160,13 +158,12 @@ impl NetworkView for NoView {
 }
 
 impl<D> OrderingProtocolMessage<D> for NoProtocol {
-
     type ProtocolMessage = ();
 
     type ProofMetadata = ();
 
-    fn verify_order_protocol_message<NI, OPVH>(network_info: &Arc<NI>, header: &Header, message: Self::ProtocolMessage) -> atlas_common::error::Result<(bool, Self::ProtocolMessage)> where NI: NetworkInformationProvider, OPVH: OrderProtocolSignatureVerificationHelper<D, Self, NI>, D: ApplicationData {
-        Ok((false, message))
+    fn verify_order_protocol_message<NI, OPVH>(network_info: &Arc<NI>, header: &Header, message: Self::ProtocolMessage) -> atlas_common::error::Result<Self::ProtocolMessage> where NI: NetworkInformationProvider, OPVH: OrderProtocolSignatureVerificationHelper<D, Self, NI>, D: ApplicationData {
+        Ok(message)
     }
 
     #[cfg(feature = "serialize_capnp")]
@@ -193,8 +190,8 @@ impl<D> OrderingProtocolMessage<D> for NoProtocol {
 impl StateTransferMessage for NoProtocol {
     type StateTransferMessage = ();
 
-    fn verify_state_message<NI, SVH>(network_info: &Arc<NI>, header: &Header, message: Self::StateTransferMessage) -> atlas_common::error::Result<(bool, Self::StateTransferMessage)> where NI: NetworkInformationProvider, SVH: StateTransferVerificationHelper {
-        Ok((false, message))
+    fn verify_state_message<NI, SVH>(network_info: &Arc<NI>, header: &Header, message: Self::StateTransferMessage) -> atlas_common::error::Result<Self::StateTransferMessage> where NI: NetworkInformationProvider, SVH: StateTransferVerificationHelper {
+        Ok(message)
     }
 
     #[cfg(feature = "serialize_capnp")]
@@ -211,11 +208,11 @@ impl StateTransferMessage for NoProtocol {
 impl<D, P> LogTransferMessage<D, P> for NoProtocol {
     type LogTransferMessage = ();
 
-    fn verify_log_message<NI, LVH>(network_info: &Arc<NI>, header: &Header, message: Self::LogTransferMessage) -> atlas_common::error::Result<(bool, Self::LogTransferMessage)>
+    fn verify_log_message<NI, LVH>(network_info: &Arc<NI>, header: &Header, message: Self::LogTransferMessage) -> atlas_common::error::Result<Self::LogTransferMessage>
         where NI: NetworkInformationProvider,
               D: ApplicationData, P: OrderingProtocolMessage<D>,
               LVH: LogTransferVerificationHelper<D, P, NI>, {
-        Ok((false, message))
+        Ok(message)
     }
 
     #[cfg(feature = "serialize_capnp")]

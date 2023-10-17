@@ -205,3 +205,15 @@ impl LoggingDecision {
         }
     }
 }
+
+/// Unwrap a shareable message, avoiding cloning at all costs
+pub fn unwrap_shareable_message<T: Clone>(message: ShareableMessage<T>) -> StoredMessage<T> {
+    match Arc::try_unwrap(message) {
+        Ok(msg) => {
+            msg.into_inner()
+        }
+        Err(pointer) => {
+            (**pointer).clone()
+        }
+    }
+}

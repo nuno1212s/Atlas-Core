@@ -19,7 +19,7 @@ pub trait LogTransferMessage<D, OP>: Send + Sync {
     /// Verify the message and return the message if it is valid
     fn verify_log_message<NI, LVH>(network_info: &Arc<NI>,
                                           header: &Header,
-                                          message: Self::LogTransferMessage) -> Result<(bool, Self::LogTransferMessage)>
+                                          message: Self::LogTransferMessage) -> Result< Self::LogTransferMessage>
         where NI: NetworkInformationProvider,
               LVH: LogTransferVerificationHelper<D, OP, NI>,
               D: ApplicationData, OP: OrderingProtocolMessage<D>;

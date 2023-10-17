@@ -37,6 +37,8 @@ pub struct OrderingProtocolArgs<D, NT>(pub ExecutorHandle<D>, pub Timeouts,
                                        pub BatchOutput<D::Request>, pub Arc<NT>,
                                        pub Vec<NodeId>) where D: ApplicationData;
 
+/// A trait that specifies how many nodes are necessary
+/// in order to tolerate f failures
 pub trait OrderProtocolTolerance {
     fn get_n_for_f(f: usize) -> usize;
 }

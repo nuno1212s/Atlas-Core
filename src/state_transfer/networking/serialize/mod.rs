@@ -17,7 +17,7 @@ pub trait StateTransferMessage: Send + Sync  {
     /// Verify the message and return the message if it is valid
     fn verify_state_message<NI, SVH>(network_info: &Arc<NI>,
                                           header: &Header,
-                                          message: Self::StateTransferMessage) -> Result<(bool, Self::StateTransferMessage)>
+                                          message: Self::StateTransferMessage) -> Result<Self::StateTransferMessage>
         where NI: NetworkInformationProvider, SVH: StateTransferVerificationHelper;
 
     #[cfg(feature = "serialize_capnp")]

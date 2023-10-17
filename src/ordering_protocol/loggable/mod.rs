@@ -29,7 +29,7 @@ pub trait PersistentOrderProtocolTypes<D, OPM>: Send + Sync {
 
     /// Verify the validity of the given proof
     fn verify_proof<NI, OPVH>(network_info: &Arc<NI>,
-                              proof: Self::Proof) -> Result<(bool, Self::Proof)>
+                              proof: Self::Proof) -> Result<Self::Proof>
         where NI: NetworkInformationProvider,
               D: ApplicationData,
               OPM: OrderingProtocolMessage<D>,

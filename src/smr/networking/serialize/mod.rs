@@ -49,7 +49,7 @@ pub trait DecisionLogMessage<D, OPM, POP>: Send + Sync {
     type DecLogPart: OrderProtocolLogPart + for<'a> Deserialize<'a> + Serialize + Send + Clone;
 
     fn verify_decision_log<NI, OPVH>(network_info: &Arc<NI>, dec_log: Self::DecLog)
-                                     -> Result<(bool, Self::DecLog)>
+                                     -> Result<Self::DecLog>
         where NI: NetworkInformationProvider,
               D: ApplicationData,
               OPM: OrderingProtocolMessage<D>,
