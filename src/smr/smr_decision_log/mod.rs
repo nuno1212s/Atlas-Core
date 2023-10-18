@@ -1,6 +1,6 @@
 use std::sync::Arc;
+
 use atlas_common::crypto::hash::Digest;
-use atlas_smr_application::serialize::ApplicationData;
 use atlas_common::error::*;
 use atlas_common::globals::ReadOnly;
 use atlas_common::maybe_vec::MaybeVec;
@@ -9,9 +9,11 @@ use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::StoredMessage;
 use atlas_smr_application::app::UpdateBatch;
 use atlas_smr_application::ExecutorHandle;
-use crate::messages::{ClientRqInfo, StoredRequestMessage};
+use atlas_smr_application::serialize::ApplicationData;
+
+use crate::messages::ClientRqInfo;
 use crate::ordering_protocol::{Decision, DecisionMetadata, OrderingProtocol, ProtocolMessage};
-use crate::ordering_protocol::loggable::{LoggableOrderProtocol, OrderProtocolPersistenceHelper, PersistentOrderProtocolTypes, PProof};
+use crate::ordering_protocol::loggable::{LoggableOrderProtocol, PersistentOrderProtocolTypes, PProof};
 use crate::ordering_protocol::networking::serialize::OrderingProtocolMessage;
 use crate::persistent_log::PersistentDecisionLog;
 use crate::smr::networking::serialize::DecisionLogMessage;
@@ -24,6 +26,7 @@ pub type ShareableConsensusMessage<D, OP> = Arc<ReadOnly<StoredMessage<<OP as Or
 pub type ShareableMessage<P> = Arc<ReadOnly<StoredMessage<P>>>;
 
 /// The record of the decision that has been made.
+#[derive(Clone)]
 pub struct LoggedDecision<O> {
     // The sequence number
     seq: SeqNo,
@@ -37,6 +40,7 @@ pub struct LoggedDecision<O> {
 /// If we return [LoggedDecisionValue<O>::ExecutionNotNeeded],
 /// we assume that the execution handling of the requests will be done
 /// by the decision log
+#[derive(Clone)]
 pub enum LoggedDecisionValue<O> {
     Execute(UpdateBatch<O>),
     ExecutionNotNeeded,
@@ -61,10 +65,11 @@ pub enum LoggingDecision {
 /// IMPORTANT: Refer to [LoggedDecision<O>] in order to better understand
 /// how to handle logged decision execution
 ///
-pub trait DecisionLog<D, OP, NT, PL>: Orderable where D: ApplicationData + 'static,
-                                                      OP: LoggableOrderProtocol<D, NT> {
+pub trait DecisionLog<D, OP, NT, PL>: Orderable + DecisionLogPersistenceHelper<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>
+    where D: ApplicationData + 'static,
+          OP: LoggableOrderProtocol<D, NT> {
     /// The serialization type containing the serializable parts for the decision log
-    type LogSerialization: DecisionLogMessage<D, OP::Serialization, OP::PersistableTypes>;
+    type LogSerialization: DecisionLogMessage<D, OP::Serialization, OP::PersistableTypes> + 'static;
 
     type Config;
 

@@ -77,5 +77,5 @@ OrderProtocolPersistenceHelper<D, Self::Serialization, Self::PersistableTypes>
     where D: ApplicationData + 'static {
 
     /// The required data types for working with the decision log
-    type PersistableTypes: PersistentOrderProtocolTypes<D, Self::Serialization>;
+    type PersistableTypes: PersistentOrderProtocolTypes<D, Self::Serialization> + 'static;
 }

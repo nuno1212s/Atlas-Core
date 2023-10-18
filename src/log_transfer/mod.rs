@@ -44,7 +44,7 @@ pub trait LogTransferProtocol<D, OP, DL, NT, PL> where D: ApplicationData + 'sta
                                                        DL: DecisionLog<D, OP, NT, PL> {
 
     /// The type which implements StateTransferMessage, to be implemented by the developer
-    type Serialization: LogTransferMessage<D, OP::Serialization>;
+    type Serialization: LogTransferMessage<D, OP::Serialization> + 'static;
 
     /// The configuration type the protocol wants to accept
     type Config;
