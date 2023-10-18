@@ -61,7 +61,7 @@ pub enum LoggingDecision {
 /// IMPORTANT: Refer to [LoggedDecision<O>] in order to better understand
 /// how to handle logged decision execution
 ///
-pub trait DecisionLog<D, OP, NT, PL>: Orderable where D: ApplicationData,
+pub trait DecisionLog<D, OP, NT, PL>: Orderable where D: ApplicationData + 'static,
                                                       OP: LoggableOrderProtocol<D, NT> {
     /// The serialization type containing the serializable parts for the decision log
     type LogSerialization: DecisionLogMessage<D, OP::Serialization, OP::PersistableTypes>;
@@ -70,7 +70,7 @@ pub trait DecisionLog<D, OP, NT, PL>: Orderable where D: ApplicationData,
 
     /// Initialize the decision log of the
     fn initialize_decision_log(config: Self::Config, persistent_log: PL, executor_handle: ExecutorHandle<D>) -> Result<Self>
-        where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>;
+        where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>, Self: Sized;
 
     /// Clear the sequence number in the decision log
     fn clear_sequence_number(&mut self, seq: SeqNo) -> Result<()>
@@ -134,12 +134,12 @@ pub trait DecisionLog<D, OP, NT, PL>: Orderable where D: ApplicationData,
 }
 
 /// Wrap a loggable message
-pub fn wrap_loggable_message<D, OP, POP>(message: StoredMessage<ProtocolMessage<D, OP>>) -> ShareableConsensusMessage<D, OP> {
+pub fn wrap_loggable_message<D, OP, POP>(message: StoredMessage<ProtocolMessage<D, OP>>) -> ShareableConsensusMessage<D, OP> where D: ApplicationData, OP: OrderingProtocolMessage<D> {
     Arc::new(ReadOnly::new(message))
 }
 
 pub trait PartiallyWriteableDecLog<D, OP, NT, PL>: DecisionLog<D, OP, NT, PL>
-    where D: ApplicationData, OP: LoggableOrderProtocol<D, NT> {
+    where D: ApplicationData + 'static, OP: LoggableOrderProtocol<D, NT> {
     fn start_installing_log(&mut self) -> Result<()>
         where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>;
 
@@ -149,18 +149,20 @@ pub trait PartiallyWriteableDecLog<D, OP, NT, PL>: DecisionLog<D, OP, NT, PL>
 }
 
 /// Persistence helper for the decision log
-pub trait DecisionLogPersistenceHelper<D, OPM, POP, LS>
+pub trait DecisionLogPersistenceHelper<D, OPM, POP, LS>: Send
     where D: ApplicationData,
           OPM: OrderingProtocolMessage<D>,
           POP: PersistentOrderProtocolTypes<D, OPM>,
           LS: DecisionLogMessage<D, OPM, POP> {
-
     /// Initialize the decision log
     fn init_decision_log(metadata: DecLogMetadata<D, OPM, POP, LS>, proofs: Vec<PProof<D, OPM, POP>>) -> DecLog<D, OPM, POP, LS>;
 
     /// Take a decision log and decompose it into parts in order to store them more quickly and easily
     /// This is also so we can support
     fn decompose_decision_log(dec_log: DecLog<D, OPM, POP, LS>) -> (DecLogMetadata<D, OPM, POP, LS>, Vec<PProof<D, OPM, POP>>);
+
+    /// Decompose a decision log into its parts, but only by references
+    fn decompose_decision_log_ref(dec_log: &DecLog<D, OPM, POP, LS>) -> (&DecLogMetadata<D, OPM, POP, LS>, Vec<&PProof<D, OPM, POP>>);
 }
 
 impl<O> LoggedDecision<O> {
@@ -194,12 +196,24 @@ impl LoggingDecision {
         Self::Proof(seq)
     }
 
-    pub fn insert_message<D, OP>(&mut self, message: &ShareableConsensusMessage<D, OP>) {
+    pub fn insert_message<D, OP>(&mut self, message: &ShareableConsensusMessage<D, OP>) where D: ApplicationData + 'static, OP: OrderingProtocolMessage<D> + 'static {
         match self {
             LoggingDecision::PartialDecision(_, messages) => {
                 messages.push((message.header().from(), message.header().digest().clone()))
             }
             LoggingDecision::Proof(_) => unreachable!(),
+        }
+    }
+}
+
+/// Unwrap a shareable message, avoiding cloning at all costs
+pub fn unwrap_shareable_message<T: Clone>(message: ShareableMessage<T>) -> StoredMessage<T> {
+    match Arc::try_unwrap(message) {
+        Ok(msg) => {
+            msg.into_inner()
+        }
+        Err(pointer) => {
+            (**pointer).clone()
         }
     }
 }

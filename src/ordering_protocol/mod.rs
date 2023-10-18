@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{Debug, Formatter};
 use std::iter;
@@ -36,12 +37,15 @@ pub struct OrderingProtocolArgs<D, NT>(pub ExecutorHandle<D>, pub Timeouts,
                                        pub BatchOutput<D::Request>, pub Arc<NT>,
                                        pub Vec<NodeId>) where D: ApplicationData;
 
+/// A trait that specifies how many nodes are necessary
+/// in order to tolerate f failures
 pub trait OrderProtocolTolerance {
     fn get_n_for_f(f: usize) -> usize;
 }
 
 /// The trait for an ordering protocol to be implemented in Atlas
-pub trait OrderingProtocol<D, NT>: OrderProtocolTolerance + Orderable where D: ApplicationData + 'static {
+pub trait OrderingProtocol<D, NT>: OrderProtocolTolerance + Orderable
+    where D: ApplicationData + 'static {
     /// The type which implements OrderingProtocolMessage, to be implemented by the developer
     type Serialization: OrderingProtocolMessage<D> + 'static;
 
@@ -62,8 +66,7 @@ pub trait OrderingProtocol<D, NT>: OrderProtocolTolerance + Orderable where D: A
     /// Poll from the ordering protocol in order to know what we should do next
     /// We do this to check if there are already messages waiting to be executed that were received ahead of time and stored.
     /// Or whether we should run state transfer or wait for messages from other replicas
-    fn poll(&mut self) -> OPPollResult<DecisionMetadata<D, Self::Serialization>,
-        ProtocolMessage<D, Self::Serialization>, D::Request>;
+    fn poll(&mut self) -> Result<OPPollResult<DecisionMetadata<D, Self::Serialization>, ProtocolMessage<D, Self::Serialization>, D::Request>>;
 
     /// Process a protocol message that we have received
     /// This can be a message received from the poll() method or a message received from other replicas.
@@ -105,7 +108,7 @@ pub struct Decision<MD, P, O> {
     decision_info: MaybeOrderedVec<DecisionInfo<MD, P, O>>,
 }
 
-#[derive(Debug, PartialOrd, Ord, PartialEq)]
+#[derive(Debug)]
 /// Information about a given decision
 pub enum DecisionInfo<MD, P, O> {
     // The decision metadata, does not indicate that the decision is made
@@ -116,7 +119,7 @@ pub enum DecisionInfo<MD, P, O> {
     DecisionDone(ProtocolConsensusDecision<O>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The information about a node having joined the quorum
 pub struct JoinInfo {
     node: NodeId,
@@ -124,7 +127,6 @@ pub struct JoinInfo {
 }
 
 /// The return enum of polling the ordering protocol
-#[derive(Debug)]
 pub enum OPPollResult<MD, P, D> {
     /// The order protocol requires the protocol to update its state to be inline with
     /// the rest of replicas in the system
@@ -145,9 +147,10 @@ pub enum OPPollResult<MD, P, D> {
 
 /// What should be the action on the decisions that are not yet decided
 ///
+#[derive(Debug)]
 pub enum DecisionsAhead {
     Ignore,
-    ClearAhead
+    ClearAhead,
 }
 
 #[derive(Debug)]
@@ -324,12 +327,6 @@ impl JoinInfo {
     }
 }
 
-impl<MD, P, D> Orderable for Decision<MD, P, D> {
-    fn sequence_number(&self) -> SeqNo {
-        self.seq
-    }
-}
-
 impl<MD, P, D> Debug for OPPollResult<MD, P, D> where P: Debug {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -345,13 +342,62 @@ impl<MD, P, D> Debug for OPPollResult<MD, P, D> where P: Debug {
             OPPollResult::RePoll => {
                 write!(f, "RePoll")
             }
-            OPPollResult::ProgressedDecision(rqs) => {
+            OPPollResult::ProgressedDecision(clear_ahead, rqs) => {
                 write!(f, "{} committed decisions", rqs.len())
             }
-            OPPollResult::QuorumJoined(decs, node) => {
-                write!(f, "Join information: {:?}. Contained Decisions {}", node, decs.map(|dec| dec.len()).unwrap_or(0))
+            OPPollResult::QuorumJoined(clear_ahead, decs, node) => {
+                let len = if let Some(vec) = decs {
+                    vec.len()
+                } else {
+                    0
+                };
+
+                write!(f, "Join information: {:?}. Contained Decisions {}, Clear Ahead {:?}", node, len, clear_ahead)
             }
         }
+    }
+}
+
+impl<MD, P, O> PartialEq<Self> for DecisionInfo<MD, P, O> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (DecisionInfo::DecisionMetadata(md), DecisionInfo::DecisionMetadata(md2)) => true,
+            (DecisionInfo::DecisionDone(prot), DecisionInfo::DecisionDone(prot2)) => true,
+            (DecisionInfo::PartialDecisionInformation(info), DecisionInfo::PartialDecisionInformation(info2)) => {
+                if info.len() != info2.len() {
+                    false
+                } else {
+                    for (message, message2) in std::iter::zip(info.iter(), info2.iter()) {
+                        if !message.header().digest().eq(message2.header().digest()) {
+                            return false;
+                        }
+                    }
+
+                    true
+                }
+            }
+            (_, _) => false
+        }
+    }
+}
+
+impl<MD, P, O> PartialOrd for DecisionInfo<MD, P, O> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (DecisionInfo::DecisionDone(_), _) => Some(Ordering::Greater),
+            (DecisionInfo::DecisionMetadata(_), DecisionInfo::DecisionDone(_)) => Some(Ordering::Less),
+            (DecisionInfo::DecisionMetadata(_), DecisionInfo::DecisionMetadata(_)) => Some(Ordering::Equal),
+            (DecisionInfo::DecisionMetadata(_), _) => Some(Ordering::Greater),
+            (DecisionInfo::PartialDecisionInformation(_), _) => Some(Ordering::Less)
+        }
+    }
+}
+
+impl<MD, P, O> Eq for DecisionInfo<MD, P, O> {}
+
+impl<MD, P, O> Ord for DecisionInfo<MD, P, O> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
     }
 }
 

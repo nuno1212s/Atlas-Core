@@ -21,7 +21,7 @@ pub trait OrderProtocolLogPart: Orderable {
     fn last_seq(&self) -> Option<SeqNo>;
 }
 
-pub trait DecisionLogMessage<D, OPM, POP> {
+pub trait DecisionLogMessage<D, OPM, POP>: Send + Sync {
 
     /// A metadata type to allow for decision logs to include some
     /// more specific information into their decision log, apart from
@@ -49,7 +49,7 @@ pub trait DecisionLogMessage<D, OPM, POP> {
     type DecLogPart: OrderProtocolLogPart + for<'a> Deserialize<'a> + Serialize + Send + Clone;
 
     fn verify_decision_log<NI, OPVH>(network_info: &Arc<NI>, dec_log: Self::DecLog)
-                                     -> Result<(bool, Self::DecLog)>
+                                     -> Result<Self::DecLog>
         where NI: NetworkInformationProvider,
               D: ApplicationData,
               OPM: OrderingProtocolMessage<D>,

@@ -16,7 +16,7 @@ use crate::smr::smr_decision_log::ShareableConsensusMessage;
 
 /// The trait definining the necessary data types for the ordering protocol to be used
 /// with the decision log
-pub trait PersistentOrderProtocolTypes<D, OPM> {
+pub trait PersistentOrderProtocolTypes<D, OPM>: Send + Sync {
     /// A proof of a given Sequence number in the consensus protocol
     /// This is used as the type to fully represent the validity of a given SeqNo in the protocol
     /// A proof with SeqNo X should mean that X has been decided correctly
@@ -29,7 +29,7 @@ pub trait PersistentOrderProtocolTypes<D, OPM> {
 
     /// Verify the validity of the given proof
     fn verify_proof<NI, OPVH>(network_info: &Arc<NI>,
-                              proof: Self::Proof) -> Result<(bool, Self::Proof)>
+                              proof: Self::Proof) -> Result<Self::Proof>
         where NI: NetworkInformationProvider,
               D: ApplicationData,
               OPM: OrderingProtocolMessage<D>,
@@ -38,7 +38,7 @@ pub trait PersistentOrderProtocolTypes<D, OPM> {
 
 /// A trait to create a separation between these helper methods and the rest
 /// of the order protocol so that we don't require generics that are not needed
-pub trait OrderProtocolPersistenceHelper<D, OPM, POP> where D: ApplicationData,
+pub trait OrderProtocolPersistenceHelper<D, OPM, POP>: Send where D: ApplicationData,
                                                             OPM: OrderingProtocolMessage<D>,
                                                             POP: PersistentOrderProtocolTypes<D, OPM> {
     /// The types of messages to be stored. This is used due to the parallelization described above.
@@ -61,8 +61,7 @@ pub trait OrderProtocolPersistenceHelper<D, OPM, POP> where D: ApplicationData,
 
     /// Decompose a given proof into it's metadata and messages, ready to be persisted
     fn decompose_proof(proof: &PProof<D, OPM, POP>)
-                       -> (&DecisionMetadata<D, OPM>,
-                           Vec<&StoredMessage<ProtocolMessage<D, OPM>>>);
+                       -> (&DecisionMetadata<D, OPM>, Vec<&StoredMessage<ProtocolMessage<D, OPM>>>);
 
     /// Extract the proof out of the protocol decision proof
     fn get_requests_in_proof(proof: &PProof<D, OPM, POP>)
@@ -73,8 +72,10 @@ pub type PProof<D, OP, POP> = <POP as PersistentOrderProtocolTypes<D, OP>>::Proo
 
 /// The trait to define the necessary methods and data types for this order protocol
 /// to be compatible with the decision log
-pub trait LoggableOrderProtocol<D, NT>: OrderingProtocol<D, NT> + OrderProtocolPersistenceHelper<D, Self::Serialization, Self::PersistableTypes>
-    where D: ApplicationData {
+pub trait LoggableOrderProtocol<D, NT>: OrderingProtocol<D, NT> +
+OrderProtocolPersistenceHelper<D, Self::Serialization, Self::PersistableTypes>
+    where D: ApplicationData + 'static {
+
     /// The required data types for working with the decision log
     type PersistableTypes: PersistentOrderProtocolTypes<D, Self::Serialization>;
 }

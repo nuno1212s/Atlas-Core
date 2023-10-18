@@ -15,7 +15,6 @@ use atlas_smr_application::serialize::ApplicationData;
 use crate::messages::StateTransfer;
 use crate::ordering_protocol::{ExecutionResult, OrderingProtocol};
 use crate::ordering_protocol::networking::serialize::NetworkView;
-use crate::persistent_log::StatefulOrderingProtocolLog;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
 use crate::timeouts::RqTimeout;
 

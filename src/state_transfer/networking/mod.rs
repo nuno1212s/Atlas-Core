@@ -11,7 +11,7 @@ use atlas_communication::message::{SerializedMessage, StoredMessage, StoredSeria
 use atlas_communication::protocol_node::ProtocolNetworkNode;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
 use atlas_communication::serialize::Serializable;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 use crate::log_transfer::networking::serialize::LogTransferMessage;
 
 use crate::messages::SystemMessage;
