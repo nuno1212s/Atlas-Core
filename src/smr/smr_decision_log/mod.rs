@@ -201,7 +201,8 @@ impl LoggingDecision {
         Self::Proof(seq)
     }
 
-    pub fn insert_message<D, OP>(&mut self, message: &ShareableConsensusMessage<D, OP>) where D: ApplicationData + 'static, OP: OrderingProtocolMessage<D> + 'static {
+    pub fn insert_message<D, OP>(&mut self, message: &ShareableConsensusMessage<D, OP>)
+        where D: ApplicationData, OP: OrderingProtocolMessage<D> {
         match self {
             LoggingDecision::PartialDecision(_, messages) => {
                 messages.push((message.header().from(), message.header().digest().clone()))

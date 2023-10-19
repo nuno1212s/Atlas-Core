@@ -16,9 +16,9 @@ pub trait OrderProtocolLog: Orderable {
 
 /// A trait defining what we need in order to verify parts of the decision log
 pub trait OrderProtocolLogPart: Orderable {
+    // We only need to add the first sequence number, since we already know the last
+    // From the orderable implementation
     fn first_seq(&self) -> Option<SeqNo>;
-
-    fn last_seq(&self) -> Option<SeqNo>;
 }
 
 pub trait DecisionLogMessage<D, OPM, POP>: Send + Sync {
