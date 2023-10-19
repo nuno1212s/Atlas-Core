@@ -160,7 +160,7 @@ pub trait DecisionLogPersistenceHelper<D, OPM, POP, LS>: Send
           POP: PersistentOrderProtocolTypes<D, OPM>,
           LS: DecisionLogMessage<D, OPM, POP> {
     /// Initialize the decision log
-    fn init_decision_log(metadata: DecLogMetadata<D, OPM, POP, LS>, proofs: Vec<PProof<D, OPM, POP>>) -> DecLog<D, OPM, POP, LS>;
+    fn init_decision_log(metadata: DecLogMetadata<D, OPM, POP, LS>, proofs: Vec<PProof<D, OPM, POP>>) -> Result<DecLog<D, OPM, POP, LS>>;
 
     /// Take a decision log and decompose it into parts in order to store them more quickly and easily
     /// This is also so we can support

@@ -108,7 +108,6 @@ pub struct Decision<MD, P, O> {
     decision_info: MaybeOrderedVec<DecisionInfo<MD, P, O>>,
 }
 
-#[derive(Debug)]
 /// Information about a given decision
 pub enum DecisionInfo<MD, P, O> {
     // The decision metadata, does not indicate that the decision is made
@@ -224,6 +223,19 @@ impl<MD, P, O> Decision<MD, P, O> {
         Decision {
             seq,
             decision_info: MaybeOrderedVec::One(DecisionInfo::PartialDecisionInformation(MaybeVec::Mult(messages))),
+        }
+    }
+
+    /// Create a decision info from metadata and messages
+    pub fn decision_info_from_metadata_and_messages(seq: SeqNo, metadata: MD, messages: MaybeVec<ShareableMessage<P>>) -> Self {
+        let mut decision_info = BTreeSet::new();
+
+        decision_info.insert(DecisionInfo::DecisionMetadata(metadata));
+        decision_info.insert(DecisionInfo::PartialDecisionInformation(messages));
+
+        Decision {
+            seq,
+            decision_info: MaybeOrderedVec::Mult(decision_info)
         }
     }
 
@@ -433,5 +445,20 @@ impl<O> Orderable for ProtocolConsensusDecision<O> {
 impl<O> Debug for ProtocolConsensusDecision<O> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ProtocolConsensusDecision {{ seq: {:?}, executable_batch: {:?}, batch_info: {:?} }}", self.seq, self.executable_batch.len(), self.batch_digest)
+    }
+}
+
+impl<MD, D, P> Debug for DecisionInfo<MD, D, P> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DecisionInfo::DecisionMetadata(_) => {
+                write!(f, "Decision metadata")
+            }
+            DecisionInfo::PartialDecisionInformation(_) => {
+                write!(f, "Partial decision information")
+            }
+            DecisionInfo::DecisionDone(_) => {
+                write!(f, "Decision Done")}
+        }
     }
 }

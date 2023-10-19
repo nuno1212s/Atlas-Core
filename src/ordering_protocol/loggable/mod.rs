@@ -52,12 +52,12 @@ pub trait OrderProtocolPersistenceHelper<D, OPM, POP>: Send where D: Application
     /// Initialize a proof from the metadata and messages stored in persistent storage
     fn init_proof_from(metadata: DecisionMetadata<D, OPM>,
                        messages: Vec<StoredMessage<ProtocolMessage<D, OPM>>>)
-                       -> PProof<D, OPM, POP>;
+                       -> Result<PProof<D, OPM, POP>>;
 
     /// Initialize a proof from the metadata and messages stored by the decision log
     fn init_proof_from_scm(metadata: DecisionMetadata<D, OPM>,
                            messages: Vec<ShareableConsensusMessage<D, OPM>>)
-                           -> PProof<D, OPM, POP>;
+                           -> Result<PProof<D, OPM, POP>>;
 
     /// Decompose a given proof into it's metadata and messages, ready to be persisted
     fn decompose_proof(proof: &PProof<D, OPM, POP>)
