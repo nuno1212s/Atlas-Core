@@ -65,7 +65,8 @@ pub(super) struct TimeoutWorker {
 
 impl TimeoutWorker {
     pub(super) fn new(worker_id: TimeoutWorkerId, node_id: NodeId, default_timeout: Duration, loopback: ChannelSyncTx<Message>) -> ChannelSyncTx<TimeoutMessage> {
-        let (work_tx, work_rx) = channel::new_bounded_sync(CHANNEL_SIZE);
+        let (work_tx, work_rx) = channel::new_bounded_sync(CHANNEL_SIZE,
+        Some("Timeout Worker Thread"));
 
         let worker = Self {
             my_node_id: node_id,

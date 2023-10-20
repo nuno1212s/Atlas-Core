@@ -391,9 +391,9 @@ pub fn initialize_request_pre_processor<WD, D, OP, ST, LP, NT>(concurrency: usiz
           ST: StateTransferMessage + 'static,
           NT: ProtocolNetworkNode<Service<D, OP, ST, LP>> + 'static,
           WD: WorkPartitioner<D::Request> + 'static {
-    let (batch_tx, receiver) = new_bounded_sync(PROPOSER_QUEUE_SIZE);
+    let (batch_tx, receiver) = new_bounded_sync(PROPOSER_QUEUE_SIZE, Some("Pre Processor Batch Output"));
 
-    let (work_sender, work_rcvr) = new_bounded_sync(PROPOSER_QUEUE_SIZE);
+    let (work_sender, work_rcvr) = new_bounded_sync(PROPOSER_QUEUE_SIZE, Some("Pre Processor Work handle"));
 
     let mut work_comms = Vec::with_capacity(concurrency);
 
