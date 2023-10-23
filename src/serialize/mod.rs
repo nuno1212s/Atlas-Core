@@ -18,7 +18,7 @@ use crate::log_transfer::networking::signature_ver::LogTransferVerificationHelpe
 
 use crate::messages::{RequestMessage, SystemMessage};
 use crate::messages::signature_ver::SigVerifier;
-use crate::ordering_protocol::networking::serialize::{NetworkView, OrderingProtocolMessage, OrderProtocolProof};
+use crate::ordering_protocol::networking::serialize::{NetworkView, OrderingProtocolMessage, OrderProtocolProof, ViewTransferProtocolMessage};
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
 use crate::smr::networking::NodeWrap;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
@@ -37,11 +37,14 @@ pub trait ReconfigurationProtocolMessage: Serializable + Send + Sync {
 }
 
 /// The type that encapsulates all the serializing, so we don't have to constantly use SystemMessage
-pub struct Service<D: ApplicationData, P: OrderingProtocolMessage<D>, S: StateTransferMessage, L: LogTransferMessage<D, P>>(PhantomData<(D, P, S, L)>);
+pub struct Service<D: ApplicationData, P: OrderingProtocolMessage<D>,
+    S: StateTransferMessage, L: LogTransferMessage<D, P>, VT: ViewTransferProtocolMessage>(PhantomData<(D, P, S, L, VT)>);
 
-pub type ServiceMessage<D: ApplicationData, P: OrderingProtocolMessage<D>, S: StateTransferMessage, L: LogTransferMessage<D, P>> = <Service<D, P, S, L> as Serializable>::Message;
+pub type ServiceMessage<D: ApplicationData, P: OrderingProtocolMessage<D>,
+    S: StateTransferMessage, L: LogTransferMessage<D, P>,
+    VT: ViewTransferProtocolMessage> = <Service<D, P, S, L, VT> as Serializable>::Message;
 
-pub type ClientServiceMsg<D: ApplicationData> = Service<D, NoProtocol, NoProtocol, NoProtocol>;
+pub type ClientServiceMsg<D: ApplicationData> = Service<D, NoProtocol, NoProtocol, NoProtocol, NoProtocol>;
 
 pub type ClientMessage<D: ApplicationData> = <ClientServiceMsg<D> as Serializable>::Message;
 
@@ -52,9 +55,14 @@ pub trait VerificationWrapper<M, D> where D: ApplicationData {
     fn wrap_reply(header: Header, reply: D::Reply) -> M;
 }
 
-impl<D, P, S, L> Serializable for Service<D, P, S, L> where
-    D: ApplicationData + 'static, P: OrderingProtocolMessage<D> + 'static, S: StateTransferMessage + 'static, L: LogTransferMessage<D, P> + 'static {
-    type Message = SystemMessage<D, P::ProtocolMessage, S::StateTransferMessage, L::LogTransferMessage>;
+impl<D, P, S, L, VT> Serializable for Service<D, P, S, L, VT> where
+    D: ApplicationData + 'static,
+    P: OrderingProtocolMessage<D> + 'static,
+    S: StateTransferMessage + 'static,
+    L: LogTransferMessage<D, P> + 'static,
+    VT: ViewTransferProtocolMessage + 'static {
+    
+    type Message = SystemMessage<D, P::ProtocolMessage, S::StateTransferMessage, L::LogTransferMessage, VT::ProtocolMessage>;
 
     fn verify_message_internal<NI, SV>(info_provider: &Arc<NI>, header: &Header, msg: &Self::Message) -> atlas_common::error::Result<()>
         where NI: NetworkInformationProvider + 'static,
@@ -73,6 +81,11 @@ impl<D, P, S, L> Serializable for Service<D, P, S, L> where
             SystemMessage::StateTransferMessage(state_transfer) => {
                 let msg = S::verify_state_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, header, state_transfer.payload().clone())?;
 
+                Ok(())
+            }
+            SystemMessage::ViewTransferMessage(view_transfer) => {
+                let msg = VT::verify_view_transfer_message::<NI, D, P, SigVerifier<SV, NI, D, P, S, L>>(info_provider, header, view_transfer.payload().clone())?;
+                
                 Ok(())
             }
             SystemMessage::OrderedRequest(request) => {

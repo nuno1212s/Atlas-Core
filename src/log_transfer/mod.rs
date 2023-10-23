@@ -14,7 +14,7 @@ use crate::ordering_protocol::loggable::{LoggableOrderProtocol, PersistentOrderP
 use crate::ordering_protocol::networking::serialize::{NetworkView, OrderingProtocolMessage};
 use crate::ordering_protocol::{OrderingProtocol, PermissionedOrderingProtocol};
 use crate::persistent_log::{PersistentDecisionLog};
-use crate::smr::smr_decision_log::{DecisionLog, LoggedDecision};
+use crate::smr::smr_decision_log::{DecisionLog, PartiallyWriteableDecLog, LoggedDecision};
 use crate::timeouts::{RqTimeout, Timeouts};
 
 pub mod networking;
@@ -39,6 +39,18 @@ pub enum LTTimeoutResult {
     NotNeeded,
 }
 
+/// Log transfer protocol.
+/// This protocol is meant to work in tandem with the [DecisionLog] abstraction, meaning
+/// it has to actually "hook" into it and directly use functions from the DecisionLog.
+/// Examples are, for example using the [DecisionLog::snapshot_log] when wanting a snapshot
+/// of the current log, [DecisionLog::install_log] when we want to install a log that
+/// we have received.
+/// This level of coupling exists because we need to be able to reference the decision log
+/// in order to obtain the current log (cloning it and passing it to this function every time
+/// would be extremely expensive) and since this protocol only makes sense when paired with
+/// the [DecisionLog], we decided that it makes sense for them to be more tightly coupled.
+///TODO: Work on Getting partial log installations integrated with this log transfer
+/// trait via [PartiallyWriteableDecLog]
 pub trait LogTransferProtocol<D, OP, DL, NT, PL> where D: ApplicationData + 'static,
                                                        OP: LoggableOrderProtocol<D, NT>,
                                                        DL: DecisionLog<D, OP, NT, PL> {
@@ -67,7 +79,6 @@ pub trait LogTransferProtocol<D, OP, DL, NT, PL> where D: ApplicationData + 'sta
               V: NetworkView;
 
     /// Process a log transfer protocol message, received from other replicas
-    ///
     fn process_message<V>(&mut self, decision_log: &mut DL, view: V,
                           message: StoredMessage<LogTM<D, OP::Serialization, Self::Serialization>>) -> Result<LTResult<D>>
         where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>,

@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 #[cfg(feature = "serialize_serde")]
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use atlas_smr_application::serialize::ApplicationData;
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
 
 /// The basic methods needed for a view
-pub trait NetworkView: Orderable + Clone {
+pub trait NetworkView: Orderable + Clone + Debug {
     fn primary(&self) -> NodeId;
 
     fn quorum(&self) -> usize;
@@ -33,23 +33,36 @@ pub trait OrderProtocolProof: Orderable {
     // At the moment I only need orderable, but I might need more in the future
 
     fn contained_messages(&self) -> usize;
-
 }
 
 pub trait PermissionedOrderingProtocolMessage: Send + Sync {
-
     #[cfg(feature = "serialize_capnp")]
     type ViewInfo: NetworkView + Send + Clone;
 
     #[cfg(feature = "serialize_serde")]
     type ViewInfo: NetworkView + for<'a> Deserialize<'a> + Serialize + Send + Clone + Debug;
-    
+}
+
+pub trait ViewTransferProtocolMessage: Send + Sync {
+    /// The general protocol type for all messages in the View Transfer protocol
+    #[cfg(feature = "serialize_capnp")]
+    type ProtocolMessage: Orderable + Send + Clone;
+
+    #[cfg(feature = "serialize_serde")]
+    type ProtocolMessage: for<'a> Deserialize<'a> + Serialize + Send + Clone + Debug;
+
+    fn verify_view_transfer_message<NI, D, OPM, OPVH>(network_info: &Arc<NI>,
+                                                       header: &Header,
+                                                       message: Self::ProtocolMessage) -> Result<Self::ProtocolMessage>
+        where NI: NetworkInformationProvider,
+              D: ApplicationData,
+              OPM: OrderingProtocolMessage<D>,
+              OPVH: OrderProtocolSignatureVerificationHelper<D, Self, NI>, Self: Sized;
 }
 
 /// We do not need a serde module since serde serialization is just done on the network level.
 /// The abstraction for ordering protocol messages.
 pub trait OrderingProtocolMessage<D>: Send + Sync {
-
     /// The general protocol type for all messages in the ordering protocol
     #[cfg(feature = "serialize_capnp")]
     type ProtocolMessage: Orderable + Send + Clone;

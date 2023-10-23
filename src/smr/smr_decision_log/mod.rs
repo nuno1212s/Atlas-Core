@@ -138,11 +138,6 @@ pub trait DecisionLog<D, OP, NT, PL>: Orderable + DecisionLogPersistenceHelper<D
         where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>;
 }
 
-/// Wrap a loggable message
-pub fn wrap_loggable_message<D, OP, POP>(message: StoredMessage<ProtocolMessage<D, OP>>) -> ShareableConsensusMessage<D, OP> where D: ApplicationData, OP: OrderingProtocolMessage<D> {
-    Arc::new(ReadOnly::new(message))
-}
-
 pub trait PartiallyWriteableDecLog<D, OP, NT, PL>: DecisionLog<D, OP, NT, PL>
     where D: ApplicationData + 'static, OP: LoggableOrderProtocol<D, NT> {
     fn start_installing_log(&mut self) -> Result<()>
@@ -168,6 +163,11 @@ pub trait DecisionLogPersistenceHelper<D, OPM, POP, LS>: Send
 
     /// Decompose a decision log into its parts, but only by references
     fn decompose_decision_log_ref(dec_log: &DecLog<D, OPM, POP, LS>) -> (&DecLogMetadata<D, OPM, POP, LS>, Vec<&PProof<D, OPM, POP>>);
+}
+
+/// Wrap a loggable message
+pub fn wrap_loggable_message<D, OP, POP>(message: StoredMessage<ProtocolMessage<D, OP>>) -> ShareableConsensusMessage<D, OP> where D: ApplicationData, OP: OrderingProtocolMessage<D> {
+    Arc::new(ReadOnly::new(message))
 }
 
 impl<O> LoggedDecision<O> {

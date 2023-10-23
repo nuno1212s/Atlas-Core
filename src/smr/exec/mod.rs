@@ -7,7 +7,7 @@ use atlas_smr_application::serialize::ApplicationData;
 use crate::log_transfer::networking::serialize::LogTransferMessage;
 
 use crate::messages::{ReplyMessage, SystemMessage};
-use crate::ordering_protocol::networking::serialize::OrderingProtocolMessage;
+use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, ViewTransferProtocolMessage};
 use crate::serialize::Service;
 use crate::smr::networking::NodeWrap;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
@@ -28,14 +28,15 @@ pub trait ReplyNode<D>: Send + Sync where D: ApplicationData {
     fn broadcast_signed(&self, reply_type: ReplyType, reply: ReplyMessage<D::Reply>, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>>;
 }
 
-impl<NT, D, P, S, L, NI, RM> ReplyNode<D> for NodeWrap<NT, D, P, S, L, NI, RM>
+impl<NT, D, P, S, L, VT, NI, RM> ReplyNode<D> for NodeWrap<NT, D, P, S, L, VT, NI, RM>
     where D: ApplicationData + 'static,
           P: OrderingProtocolMessage<D> + 'static,
           L: LogTransferMessage<D, P> + 'static,
           S: StateTransferMessage + 'static,
+          VT: ViewTransferProtocolMessage + 'static,
           NI: NetworkInformationProvider + 'static,
           RM: Serializable + 'static,
-          NT: FullNetworkNode<NI, RM, Service<D, P, S, L>> + 'static,
+          NT: FullNetworkNode<NI, RM, Service<D, P, S, L, VT>> + 'static,
 {
     fn send(&self, reply_type: ReplyType, reply: ReplyMessage<D::Reply>, target: NodeId, flush: bool) -> Result<()> {
         let message = match reply_type {

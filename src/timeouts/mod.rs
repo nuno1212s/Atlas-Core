@@ -420,7 +420,7 @@ impl TimeoutPhase {
 fn launch_orchestrator_thread<WP, D>(worker_count: u32, node_id: NodeId, timeout_dur: Duration, loopback: ChannelSyncTx<Message>) -> Timeouts
     where D: ApplicationData + 'static,
           WP: WorkPartitioner<D::Request> + 'static {
-    let (tx, rx) = channel::new_bounded_sync(CHANNEL_SIZE);
+    let (tx, rx) = channel::new_bounded_sync(CHANNEL_SIZE, Some("Timeout Orchestrator Thread"));
 
     let mut workers = Vec::with_capacity(worker_count as usize);
 

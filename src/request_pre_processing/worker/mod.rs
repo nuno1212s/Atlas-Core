@@ -320,7 +320,8 @@ impl<O> RequestPreProcessingWorker<O> where O: Clone {
 
 pub(super) fn spawn_worker<O>(worker_id: usize, batch_tx: ChannelSyncTx<(PreProcessorOutputMessage<O>, Instant)>) -> RequestPreProcessingWorkerHandle<O>
     where O: Clone + Send + 'static {
-    let (worker_tx, worker_rx) = atlas_common::channel::new_bounded_sync(WORKER_QUEUE_SIZE);
+    let (worker_tx, worker_rx) = atlas_common::channel::new_bounded_sync(WORKER_QUEUE_SIZE, 
+                                                                         Some(format!("Worker Handle {}", worker_id).as_str()));
 
     let worker = RequestPreProcessingWorker::new(worker_id, worker_rx, batch_tx);
 

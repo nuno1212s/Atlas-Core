@@ -1,7 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{Debug, Formatter};
-use std::iter;
 use std::sync::Arc;
 
 use atlas_common::crypto::hash::Digest;
@@ -10,12 +9,11 @@ use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::maybe_vec::ordered::{MaybeOrderedVec, MaybeOrderedVecBuilder};
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
-use atlas_communication::message::StoredMessage;
 use atlas_smr_application::app::UpdateBatch;
 use atlas_smr_application::ExecutorHandle;
 use atlas_smr_application::serialize::ApplicationData;
 
-use crate::messages::{ClientRqInfo, Protocol};
+use crate::messages::ClientRqInfo;
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
 use crate::persistent_log::OrderingProtocolLog;
 use crate::request_pre_processing::{BatchOutput, RequestPreProcessor};
@@ -40,7 +38,15 @@ pub struct OrderingProtocolArgs<D, NT>(pub ExecutorHandle<D>, pub Timeouts,
 /// A trait that specifies how many nodes are necessary
 /// in order to tolerate f failures
 pub trait OrderProtocolTolerance {
+
+    /// Get the amount of nodes necessary to tolerate f faults
     fn get_n_for_f(f: usize) -> usize;
+
+    /// Get the quorum of nodes that N nodes with this protocol
+    /// can tolerate
+    fn get_quorum_for_n(n: usize) -> usize;
+
+    fn get_f_for_n(n : usize) -> usize;
 }
 
 /// The trait for an ordering protocol to be implemented in Atlas
@@ -83,7 +89,7 @@ pub trait OrderingProtocol<D, NT>: OrderProtocolTolerance + Orderable
 
 /// A permissioned ordering protocol, meaning only a select few are actually part of the quorum that decides the
 /// ordering of the operations.
-pub trait PermissionedOrderingProtocol {
+pub trait PermissionedOrderingProtocol: OrderProtocolTolerance {
     type PermissionedSerialization: PermissionedOrderingProtocolMessage + 'static;
 
     /// Get the current view of the ordering protocol

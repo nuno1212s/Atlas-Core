@@ -14,7 +14,7 @@ use atlas_communication::serialize::{Buf, Serializable};
 use atlas_smr_application::serialize::ApplicationData;
 use crate::log_transfer::networking::serialize::LogTransferMessage;
 use crate::messages::{ForwardedRequestsMessage, SystemMessage};
-use crate::ordering_protocol::networking::serialize::OrderingProtocolMessage;
+use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, ViewTransferProtocolMessage};
 use crate::serialize::Service;
 use crate::smr::networking::NodeWrap;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
@@ -65,15 +65,60 @@ pub trait OrderProtocolSendNode<D, OPM>: Send + Sync where D: ApplicationData + 
     fn broadcast_serialized(&self, messages: BTreeMap<NodeId, StoredSerializedProtocolMessage<OPM::ProtocolMessage>>) -> std::result::Result<(), Vec<NodeId>>;
 }
 
-impl<NT, D, P, S, L, RM, NI> OrderProtocolSendNode<D, P> for NodeWrap<NT, D, P, S, L, NI, RM>
+pub trait ViewTransferProtocolSendNode<VT>: Send + Sync where
+    VT: ViewTransferProtocolMessage {
+    type NetworkInfoProvider: NetworkInformationProvider + 'static;
+
+    fn id(&self) -> NodeId;
+
+    /// The network information provider
+    fn network_info_provider(&self) -> &Arc<Self::NetworkInfoProvider>;
+
+    /// Sends a message to a given target.
+    /// Does not block on the message sent. Returns a result that is
+    /// Ok if there is a current connection to the target or err if not. No other checks are made
+    /// on the success of the message dispatch
+    fn send(&self, message: VT::ProtocolMessage, target: NodeId, flush: bool) -> Result<()>;
+
+    /// Sends a signed message to a given target
+    /// Does not block on the message sent. Returns a result that is
+    /// Ok if there is a current connection to the target or err if not. No other checks are made
+    /// on the success of the message dispatch
+    fn send_signed(&self, message: VT::ProtocolMessage, target: NodeId, flush: bool) -> Result<()>;
+
+    /// Broadcast a message to all of the given targets
+    /// Does not block on the message sent. Returns a result that is
+    /// Ok if there is a current connection to the targets or err if not. No other checks are made
+    /// on the success of the message dispatch
+    fn broadcast(&self, message: VT::ProtocolMessage, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>>;
+
+    /// Broadcast a signed message for all of the given targets
+    /// Does not block on the message sent. Returns a result that is
+    /// Ok if there is a current connection to the targets or err if not. No other checks are made
+    /// on the success of the message dispatch
+    fn broadcast_signed(&self, message: VT::ProtocolMessage, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>>;
+
+    /// Serialize a message to a given target.
+    /// Creates the serialized byte buffer along with the header, so we can send it later.
+    fn serialize_digest_message(&self, message: VT::ProtocolMessage) -> Result<(SerializedMessage<VT::ProtocolMessage>, Digest)>;
+
+    /// Broadcast the serialized messages provided.
+    /// Does not block on the message sent. Returns a result that is
+    /// Ok if there is a current connection to the targets or err if not. No other checks are made
+    /// on the success of the message dispatch
+    fn broadcast_serialized(&self, messages: BTreeMap<NodeId, StoredSerializedProtocolMessage<VT::ProtocolMessage>>) -> std::result::Result<(), Vec<NodeId>>;
+}
+
+
+impl<NT, D, P, S, L, VT, RM, NI> OrderProtocolSendNode<D, P> for NodeWrap<NT, D, P, S, L, VT, NI, RM>
     where D: ApplicationData + 'static,
           P: OrderingProtocolMessage<D> + 'static,
           L: LogTransferMessage<D, P> + 'static,
           S: StateTransferMessage + 'static,
+          VT: ViewTransferProtocolMessage + 'static,
           RM: Serializable + 'static,
           NI: NetworkInformationProvider + 'static,
-          NT: FullNetworkNode<NI, RM, Service<D, P, S, L>>, {
-
+          NT: FullNetworkNode<NI, RM, Service<D, P, S, L, VT>>, {
     type NetworkInfoProvider = NT::NetworkInfoProvider;
 
     #[inline(always)]
@@ -99,10 +144,12 @@ impl<NT, D, P, S, L, RM, NI> OrderProtocolSendNode<D, P> for NodeWrap<NT, D, P, 
         self.0.send_signed(SystemMessage::from_protocol_message(message), target, flush)
     }
 
+    #[inline(always)]
     fn broadcast(&self, message: P::ProtocolMessage, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>> {
         self.0.broadcast(SystemMessage::from_protocol_message(message), targets)
     }
 
+    #[inline(always)]
     fn broadcast_signed(&self, message: P::ProtocolMessage, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>> {
         self.0.broadcast_signed(SystemMessage::from_protocol_message(message), targets)
     }
