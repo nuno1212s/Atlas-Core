@@ -98,6 +98,14 @@ pub enum STResult {
     StateTransferFinished(SeqNo),
 }
 
+/// The State Transfer Poll result
+pub enum STPollResult<ST> {
+    ReceiveMsg,
+    RePoll,
+    Exec(StoredMessage<ST>),
+    STResult(STResult),
+}
+
 /// The result of processing a message in the state transfer protocol
 pub enum STTimeoutResult {
     RunCst,
@@ -114,10 +122,13 @@ pub trait StateTransferProtocol<S, NT, PL> {
     fn request_latest_state<V>(&mut self, view: V) -> Result<()>
         where V: NetworkView;
 
+    /// Poll the state transfer protocol to check if there are any novel messages to receive
+    fn poll(&mut self) -> Result<STPollResult<CstM<Self::Serialization>>>;
+
     /// Handle a state transfer protocol message that was received while executing the ordering protocol
     fn handle_off_ctx_message<V>(&mut self,
                                  view: V,
-                                 message: StoredMessage<StateTransfer<CstM<Self::Serialization>>>)
+                                 message: StoredMessage<CstM<Self::Serialization>>)
                                  -> Result<()>
         where V: NetworkView;
 
@@ -126,7 +137,7 @@ pub trait StateTransferProtocol<S, NT, PL> {
     /// state can be installed (if that's the case)
     fn process_message<V>(&mut self,
                           view: V,
-                          message: StoredMessage<StateTransfer<CstM<Self::Serialization>>>)
+                          message: StoredMessage<CstM<Self::Serialization>>)
                           -> Result<STResult>
         where V: NetworkView;
 

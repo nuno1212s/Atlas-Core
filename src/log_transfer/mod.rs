@@ -14,7 +14,7 @@ use crate::ordering_protocol::loggable::{LoggableOrderProtocol, PersistentOrderP
 use crate::ordering_protocol::networking::serialize::{NetworkView, OrderingProtocolMessage};
 use crate::ordering_protocol::{OrderingProtocol, PermissionedOrderingProtocol};
 use crate::persistent_log::{PersistentDecisionLog};
-use crate::smr::smr_decision_log::{DecisionLog, PartiallyWriteableDecLog, LoggedDecision};
+use crate::smr::smr_decision_log::{DecisionLog, PartiallyWriteableDecLog, LoggedDecision, ShareableMessage};
 use crate::timeouts::{RqTimeout, Timeouts};
 
 pub mod networking;
@@ -34,9 +34,18 @@ pub enum LTResult<D: ApplicationData> {
     LTPFinished(SeqNo, SeqNo, MaybeVec<LoggedDecision<D::Request>>),
 }
 
+/// Log Transfer protocol timeout result
 pub enum LTTimeoutResult {
     RunLTP,
     NotNeeded,
+}
+
+/// Log Transfer polling result
+pub enum LTPollResult<LT, D: ApplicationData> {
+    ReceiveMsg,
+    RePoll,
+    Exec(StoredMessage<LT>),
+    LTResult(LTResult<D>),
 }
 
 /// Log transfer protocol.
@@ -54,7 +63,6 @@ pub enum LTTimeoutResult {
 pub trait LogTransferProtocol<D, OP, DL, NT, PL> where D: ApplicationData + 'static,
                                                        OP: LoggableOrderProtocol<D, NT>,
                                                        DL: DecisionLog<D, OP, NT, PL> {
-
     /// The type which implements StateTransferMessage, to be implemented by the developer
     type Serialization: LogTransferMessage<D, OP::Serialization> + 'static;
 
@@ -69,6 +77,9 @@ pub trait LogTransferProtocol<D, OP, DL, NT, PL> where D: ApplicationData + 'sta
     fn request_latest_log<V>(&mut self, decision_log: &mut DL, view: V) -> Result<()>
         where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>,
               V: NetworkView;
+
+    /// Polling method for the log transfer protocol
+    fn poll(&mut self) -> Result<LTPollResult<LogTM<D, OP, Self::Serialization>, D>>;
 
     /// Handle a state transfer protocol message that was received while executing the ordering protocol
     fn handle_off_ctx_message<V>(&mut self, decision_log: &mut DL,

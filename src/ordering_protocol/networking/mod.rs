@@ -67,6 +67,7 @@ pub trait OrderProtocolSendNode<D, OPM>: Send + Sync where D: ApplicationData + 
 
 pub trait ViewTransferProtocolSendNode<VT>: Send + Sync where
     VT: ViewTransferProtocolMessage {
+
     type NetworkInfoProvider: NetworkInformationProvider + 'static;
 
     fn id(&self) -> NodeId;
@@ -181,6 +182,83 @@ impl<NT, D, P, S, L, VT, RM, NI> OrderProtocolSendNode<D, P> for NodeWrap<NT, D,
             let (message, bytes) = message.into_inner();
 
             let sys_msg = SystemMessage::from_protocol_message(message);
+
+            let serialized_msg = SerializedMessage::new(sys_msg, bytes);
+
+            map.insert(node, StoredMessage::new(header, serialized_msg));
+        }
+
+        self.0.broadcast_serialized(map)
+    }
+}
+
+impl<NT, D, P, S, L, VT, RM, NI> ViewTransferProtocolSendNode<VT> for NodeWrap<NT, D, P, S, L, VT, NI, RM>
+    where D: ApplicationData + 'static,
+          P: OrderingProtocolMessage<D> + 'static,
+          L: LogTransferMessage<D, P> + 'static,
+          S: StateTransferMessage + 'static,
+          VT: ViewTransferProtocolMessage + 'static,
+          RM: Serializable + 'static,
+          NI: NetworkInformationProvider + 'static,
+          NT: FullNetworkNode<NI, RM, Service<D, P, S, L, VT>>, {
+    type NetworkInfoProvider = NT::NetworkInfoProvider;
+
+    #[inline(always)]
+    fn id(&self) -> NodeId {
+        self.0.id()
+    }
+
+    fn network_info_provider(&self) -> &Arc<Self::NetworkInfoProvider> {
+        NT::network_info_provider(&self.0)
+    }
+
+    #[inline(always)]
+    fn send(&self, message: VT::ProtocolMessage, target: NodeId, flush: bool) -> Result<()> {
+        self.0.send(SystemMessage::from_view_transfer_message(message), target, flush)
+    }
+
+    #[inline(always)]
+    fn send_signed(&self, message: VT::ProtocolMessage, target: NodeId, flush: bool) -> Result<()> {
+        self.0.send_signed(SystemMessage::from_view_transfer_message(message), target, flush)
+    }
+
+    #[inline(always)]
+    fn broadcast(&self, message: VT::ProtocolMessage, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>> {
+        self.0.broadcast(SystemMessage::from_view_transfer_message(message), targets)
+    }
+
+    #[inline(always)]
+    fn broadcast_signed(&self, message: VT::ProtocolMessage, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>> {
+        self.0.broadcast_signed(SystemMessage::from_view_transfer_message(message), targets)
+    }
+
+    /// Why do we do this wrapping/unwrapping? Well, since we want to avoid having to store all of the
+    /// generics that are used at the replica level (with all message types), we can't
+    /// just return a system message type.
+    /// This way, we can still keep this working well with just very small memory changes (to the stack)
+    /// and avoid having to store all those unnecessary types in generics
+    #[inline(always)]
+    fn serialize_digest_message(&self, message: VT::ProtocolMessage) -> Result<(SerializedMessage<VT::ProtocolMessage>, Digest)> {
+        let (message, digest) = self.0.serialize_digest_message(SystemMessage::from_view_transfer_message(message))?;
+
+        let (message, bytes) = message.into_inner();
+
+        let message = message.into_view_transfer_message();
+
+        Ok((SerializedMessage::new(message, bytes), digest))
+    }
+
+    /// Read comment above
+    #[inline(always)]
+    fn broadcast_serialized(&self, messages: BTreeMap<NodeId, StoredSerializedProtocolMessage<VT::ProtocolMessage>>) -> std::result::Result<(), Vec<NodeId>> {
+        let mut map = BTreeMap::new();
+
+        for (node, message) in messages.into_iter() {
+            let (header, message) = message.into_inner();
+
+            let (message, bytes) = message.into_inner();
+
+            let sys_msg = SystemMessage::from_view_transfer_message(message);
 
             let serialized_msg = SerializedMessage::new(sys_msg, bytes);
 

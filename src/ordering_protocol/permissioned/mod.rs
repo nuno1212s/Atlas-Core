@@ -32,6 +32,14 @@ pub enum VTResult {
     VTransferFinished,
 }
 
+/// Result of Polling the view transfer protocol
+pub enum VTPollResult<VT> {
+    ReceiveMsg,
+    RePoll,
+    Exec(StoredMessage<VT>),
+    VTResult(VTResult),
+}
+
 /// Result of the view transfer protocol
 pub enum VTTimeoutResult {
     RunVTP,
@@ -56,8 +64,16 @@ pub trait ViewTransferProtocol<OP, NT> {
         where NT: ViewTransferProtocolSendNode<Self::Serialization>,
               OP: PermissionedOrderingProtocol;
 
+    /// View transfer poll result
+    fn poll(&mut self) -> Result<VTPollResult<VTMsg<Self::Serialization>>>
+        where NT: ViewTransferProtocolSendNode<Self::Serialization>;
+
     /// Request a view transfer
     fn request_latest_view(&mut self, op: &OP) -> Result<()>
+        where NT: ViewTransferProtocolSendNode<Self::Serialization>,
+              OP: PermissionedOrderingProtocol;
+
+    fn handle_off_context_msg(&mut self, op: &OP, message: StoredMessage<VTMsg<Self::Serialization>>) -> Result<VTResult>
         where NT: ViewTransferProtocolSendNode<Self::Serialization>,
               OP: PermissionedOrderingProtocol;
 
