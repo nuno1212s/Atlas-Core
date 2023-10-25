@@ -9,7 +9,7 @@ use atlas_smr_application::serialize::ApplicationData;
 use crate::log_transfer::networking::serialize::LogTransferMessage;
 use crate::messages::{ReplyMessage, RequestMessage, SystemMessage};
 use crate::messages::signature_ver::SigVerifier;
-use crate::ordering_protocol::networking::serialize::OrderingProtocolMessage;
+use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, ViewTransferProtocolMessage};
 use crate::serialize::Service;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
 
@@ -25,16 +25,17 @@ pub trait OrderProtocolSignatureVerificationHelper<D, OP, NI> where D: Applicati
     fn verify_protocol_message(network_info: &Arc<NI>, header: &Header, message: OP::ProtocolMessage) -> Result<OP::ProtocolMessage>;
 }
 
-impl<SV, NI, D, P, S, L> OrderProtocolSignatureVerificationHelper<D, P, NI> for SigVerifier<SV, NI, D, P, S, L>
+impl<SV, NI, D, P, S, L, VT> OrderProtocolSignatureVerificationHelper<D, P, NI> for SigVerifier<SV, NI, D, P, S, L, VT>
     where D: ApplicationData + 'static,
           P: OrderingProtocolMessage<D> + 'static,
           L: LogTransferMessage<D, P> + 'static,
           S: StateTransferMessage + 'static,
+          VT: ViewTransferProtocolMessage + 'static,
           NI: NetworkInformationProvider + 'static,
-          SV: NetworkMessageSignatureVerifier<Service<D, P, S, L>, NI>
+          SV: NetworkMessageSignatureVerifier<Service<D, P, S, L, VT>, NI>
 {
     fn verify_request_message(network_info: &Arc<NI>, header: &Header, request: RequestMessage<D::Request>) -> Result<RequestMessage<D::Request>> {
-        let message = SystemMessage::<D, P::ProtocolMessage, S::StateTransferMessage, L::LogTransferMessage>::OrderedRequest(request);
+        let message = SystemMessage::<D, P::ProtocolMessage, S::StateTransferMessage, L::LogTransferMessage, VT::ProtocolMessage>::OrderedRequest(request);
 
         let message = SV::verify_signature(network_info, header, message)?;
 
@@ -46,7 +47,7 @@ impl<SV, NI, D, P, S, L> OrderProtocolSignatureVerificationHelper<D, P, NI> for 
     }
 
     fn verify_reply_message(network_info: &Arc<NI>, header: &Header, reply: ReplyMessage<D::Reply>) -> Result<ReplyMessage<D::Reply>> {
-        let message = SystemMessage::<D, P::ProtocolMessage, S::StateTransferMessage, L::LogTransferMessage>::OrderedReply(reply);
+        let message = SystemMessage::<D, P::ProtocolMessage, S::StateTransferMessage, L::LogTransferMessage, VT::ProtocolMessage>::OrderedReply(reply);
 
         let message = SV::verify_signature(network_info, header, message)?;
 
@@ -58,7 +59,7 @@ impl<SV, NI, D, P, S, L> OrderProtocolSignatureVerificationHelper<D, P, NI> for 
     }
 
     fn verify_protocol_message(network_info: &Arc<NI>, header: &Header, message: P::ProtocolMessage) -> Result<P::ProtocolMessage> {
-        let message = SystemMessage::<D, P::ProtocolMessage, S::StateTransferMessage, L::LogTransferMessage>::from_protocol_message(message);
+        let message = SystemMessage::<D, P::ProtocolMessage, S::StateTransferMessage, L::LogTransferMessage, VT::ProtocolMessage>::from_protocol_message(message);
 
         let message = SV::verify_signature(network_info, header, message)?;
 

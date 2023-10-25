@@ -3,22 +3,10 @@ use atlas_common::node_id::NodeId;
 use atlas_common::error::*;
 use atlas_communication::message::StoredMessage;
 use crate::ordering_protocol::networking::serialize::{PermissionedOrderingProtocolMessage, ViewTransferProtocolMessage};
-use crate::ordering_protocol::OrderingProtocol;
+use crate::ordering_protocol::{OrderingProtocol, PermissionedOrderingProtocol};
 use crate::ordering_protocol::networking::ViewTransferProtocolSendNode;
 use crate::ordering_protocol::View;
 use crate::timeouts::RqTimeout;
-
-/// A permissioned ordering protocol, meaning only a select few are actually part of the quorum that decides the
-/// ordering of the operations.
-pub trait PermissionedOrderingProtocol {
-    type PermissionedSerialization: PermissionedOrderingProtocolMessage + 'static;
-
-    /// Get the current view of the ordering protocol
-    fn view(&self) -> View<Self::PermissionedSerialization>;
-
-    /// Install a given view into the ordering protocol
-    fn install_view(&mut self, view: View<Self::PermissionedSerialization>);
-}
 
 /// The result of processing a message with the view transfer protocol
 pub enum VTResult {
@@ -62,7 +50,7 @@ pub trait ViewTransferProtocol<OP, NT> {
     /// Initialize the view transfer protocol
     fn initialize_view_transfer_protocol(config: Self::Config, net: Arc<NT>, view: Vec<NodeId>) -> Result<Self>
         where NT: ViewTransferProtocolSendNode<Self::Serialization>,
-              OP: PermissionedOrderingProtocol;
+              Self: Sized;
 
     /// View transfer poll result
     fn poll(&mut self) -> Result<VTPollResult<VTMsg<Self::Serialization>>>

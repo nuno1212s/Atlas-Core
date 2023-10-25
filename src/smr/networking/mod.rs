@@ -14,7 +14,7 @@ use atlas_communication::serialize::Serializable;
 use atlas_smr_application::serialize::ApplicationData;
 use crate::log_transfer::networking::LogTransferSendNode;
 use crate::log_transfer::networking::serialize::LogTransferMessage;
-use crate::ordering_protocol::networking::OrderProtocolSendNode;
+use crate::ordering_protocol::networking::{OrderProtocolSendNode, ViewTransferProtocolSendNode};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, ViewTransferProtocolMessage};
 use crate::serialize::{Service, ServiceMessage};
 use crate::smr::exec::ReplyNode;
@@ -24,7 +24,8 @@ use crate::state_transfer::networking::StateTransferSendNode;
 ///TODO: I wound up creating a whole new layer of abstractions, but I'm not sure they are necessary. I did it
 /// To allow for the protocols to all use NT, as if I didn't, a lot of things would have to change in how the generic NT was
 /// going to be passed around the protocols. I'm not sure if this is the best way to do it, but it works for now.
-pub trait SMRNetworkNode<NI, RM, D, P, S, L, VT>: FullNetworkNode<NI, RM, Service<D, P, S, L, VT>> + ReplyNode<D> + StateTransferSendNode<S> + OrderProtocolSendNode<D, P> + LogTransferSendNode<D, P, L>
+pub trait SMRNetworkNode<NI, RM, D, P, S, L, VT>: FullNetworkNode<NI, RM, Service<D, P, S, L, VT>> + ReplyNode<D> +
+StateTransferSendNode<S> + OrderProtocolSendNode<D, P> + LogTransferSendNode<D, P, L> + ViewTransferProtocolSendNode<VT>
     where D: ApplicationData + 'static,
           P: OrderingProtocolMessage<D> + 'static,
           L: LogTransferMessage<D, P> + 'static,

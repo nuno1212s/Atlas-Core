@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 use atlas_common::crypto::hash::Digest;
@@ -220,6 +221,25 @@ pub fn unwrap_shareable_message<T: Clone>(message: ShareableMessage<T>) -> Store
         }
         Err(pointer) => {
             (**pointer).clone()
+        }
+    }
+}
+
+impl<O> Debug for LoggedDecision<O> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LoggedDecision {:?}, {} Client Rqs, {:?}", self.seq, self.contained_client_requests.len(), self.decision_value)
+    }
+}
+
+impl<O> Debug for LoggedDecisionValue<O> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LoggedDecisionValue::Execute(_) => {
+                write!(f, "Execute decs")
+            }
+            LoggedDecisionValue::ExecutionNotNeeded => {
+                write!(f, "Exec not needed")
+            }
         }
     }
 }

@@ -79,7 +79,7 @@ pub trait LogTransferProtocol<D, OP, DL, NT, PL> where D: ApplicationData + 'sta
               V: NetworkView;
 
     /// Polling method for the log transfer protocol
-    fn poll(&mut self) -> Result<LTPollResult<LogTM<D, OP, Self::Serialization>, D>>;
+    fn poll(&mut self) -> Result<LTPollResult<LogTM<D, OP::Serialization, Self::Serialization>, D>>;
 
     /// Handle a state transfer protocol message that was received while executing the ordering protocol
     fn handle_off_ctx_message<V>(&mut self, decision_log: &mut DL,

@@ -61,7 +61,6 @@ impl<D, P, S, L, VT> Serializable for Service<D, P, S, L, VT> where
     S: StateTransferMessage + 'static,
     L: LogTransferMessage<D, P> + 'static,
     VT: ViewTransferProtocolMessage + 'static {
-    
     type Message = SystemMessage<D, P::ProtocolMessage, S::StateTransferMessage, L::LogTransferMessage, VT::ProtocolMessage>;
 
     fn verify_message_internal<NI, SV>(info_provider: &Arc<NI>, header: &Header, msg: &Self::Message) -> atlas_common::error::Result<()>
@@ -69,23 +68,23 @@ impl<D, P, S, L, VT> Serializable for Service<D, P, S, L, VT> where
               SV: NetworkMessageSignatureVerifier<Self, NI> {
         match msg {
             SystemMessage::ProtocolMessage(protocol) => {
-                let msg = P::verify_order_protocol_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, header, protocol.payload().clone())?;
+                let msg = P::verify_order_protocol_message::<NI, SigVerifier<SV, NI, D, P, S, L, VT>>(info_provider, header, protocol.payload().clone())?;
 
                 Ok(())
             }
             SystemMessage::LogTransferMessage(log_transfer) => {
-                let msg = L::verify_log_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, header, log_transfer.payload().clone())?;
+                let msg = L::verify_log_message::<NI, SigVerifier<SV, NI, D, P, S, L, VT>>(info_provider, header, log_transfer.payload().clone())?;
 
                 Ok(())
             }
             SystemMessage::StateTransferMessage(state_transfer) => {
-                let msg = S::verify_state_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, header, state_transfer.payload().clone())?;
+                let msg = S::verify_state_message::<NI, SigVerifier<SV, NI, D, P, S, L, VT>>(info_provider, header, state_transfer.payload().clone())?;
 
                 Ok(())
             }
             SystemMessage::ViewTransferMessage(view_transfer) => {
-                let msg = VT::verify_view_transfer_message::<NI, D, P, SigVerifier<SV, NI, D, P, S, L>>(info_provider, header, view_transfer.payload().clone())?;
-                
+                let msg = VT::verify_view_transfer_message::<NI, D, P, SigVerifier<SV, NI, D, P, S, L, VT>>(info_provider, header, view_transfer.payload().clone())?;
+
                 Ok(())
             }
             SystemMessage::OrderedRequest(request) => {
@@ -104,7 +103,7 @@ impl<D, P, S, L, VT> Serializable for Service<D, P, S, L, VT> where
                 let header = fwd_protocol.header();
                 let message = fwd_protocol.message();
 
-                let message = P::verify_order_protocol_message::<NI, SigVerifier<SV, NI, D, P, S, L>>(info_provider, message.header(), message.message().payload().clone())?;
+                let message = P::verify_order_protocol_message::<NI, SigVerifier<SV, NI, D, P, S, L, VT>>(info_provider, message.header(), message.message().payload().clone())?;
 
                 Ok(())
             }
@@ -236,6 +235,14 @@ impl<D, P> LogTransferMessage<D, P> for NoProtocol {
     #[cfg(feature = "serialize_capnp")]
     fn deserialize_capnp(_: febft_capnp::cst_messages_capnp::cst_message::Reader) -> Result<Self::LogTransferMessage> {
         unimplemented!()
+    }
+}
+
+impl ViewTransferProtocolMessage for NoProtocol {
+    type ProtocolMessage = ();
+
+    fn verify_view_transfer_message<NI, D, OPM, OPVH>(network_info: &Arc<NI>, header: &Header, message: Self::ProtocolMessage) -> atlas_common::error::Result<Self::ProtocolMessage> where NI: NetworkInformationProvider, D: ApplicationData, OPM: OrderingProtocolMessage<D>, OPVH: OrderProtocolSignatureVerificationHelper<D, OPM, NI>, Self: Sized {
+        Ok(message)
     }
 }
 

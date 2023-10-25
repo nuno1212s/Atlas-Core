@@ -57,7 +57,7 @@ pub trait ViewTransferProtocolMessage: Send + Sync {
         where NI: NetworkInformationProvider,
               D: ApplicationData,
               OPM: OrderingProtocolMessage<D>,
-              OPVH: OrderProtocolSignatureVerificationHelper<D, Self, NI>, Self: Sized;
+              OPVH: OrderProtocolSignatureVerificationHelper<D, OPM, NI>, Self: Sized;
 }
 
 /// We do not need a serde module since serde serialization is just done on the network level.

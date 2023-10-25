@@ -113,6 +113,7 @@ pub enum STTimeoutResult {
 }
 
 pub type CstM<M: StateTransferMessage> = <M as StateTransferMessage>::StateTransferMessage;
+pub type STMsg<M: StateTransferMessage> = <M as StateTransferMessage>::StateTransferMessage;
 
 pub trait StateTransferProtocol<S, NT, PL> {
     /// The type which implements StateTransferMessage, to be implemented by the developer
