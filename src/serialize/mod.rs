@@ -83,7 +83,7 @@ impl<D, P, S, L, VT> Serializable for Service<D, P, S, L, VT> where
                 Ok(())
             }
             SystemMessage::ViewTransferMessage(view_transfer) => {
-                let msg = VT::verify_view_transfer_message::<NI, D, P, SigVerifier<SV, NI, D, P, S, L, VT>>(info_provider, header, view_transfer.payload().clone())?;
+                let msg = VT::verify_view_transfer_message::<NI>(info_provider, header, view_transfer.payload().clone())?;
 
                 Ok(())
             }
@@ -241,7 +241,8 @@ impl<D, P> LogTransferMessage<D, P> for NoProtocol {
 impl ViewTransferProtocolMessage for NoProtocol {
     type ProtocolMessage = ();
 
-    fn verify_view_transfer_message<NI, D, OPM, OPVH>(network_info: &Arc<NI>, header: &Header, message: Self::ProtocolMessage) -> atlas_common::error::Result<Self::ProtocolMessage> where NI: NetworkInformationProvider, D: ApplicationData, OPM: OrderingProtocolMessage<D>, OPVH: OrderProtocolSignatureVerificationHelper<D, OPM, NI>, Self: Sized {
+    fn verify_view_transfer_message<NI>(network_info: &Arc<NI>, header: &Header, message: Self::ProtocolMessage) -> atlas_common::error::Result<Self::ProtocolMessage>
+        where NI: NetworkInformationProvider, Self: Sized {
         Ok(message)
     }
 }

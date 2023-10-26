@@ -51,13 +51,10 @@ pub trait ViewTransferProtocolMessage: Send + Sync {
     #[cfg(feature = "serialize_serde")]
     type ProtocolMessage: for<'a> Deserialize<'a> + Serialize + Send + Clone + Debug;
 
-    fn verify_view_transfer_message<NI, D, OPM, OPVH>(network_info: &Arc<NI>,
-                                                       header: &Header,
-                                                       message: Self::ProtocolMessage) -> Result<Self::ProtocolMessage>
-        where NI: NetworkInformationProvider,
-              D: ApplicationData,
-              OPM: OrderingProtocolMessage<D>,
-              OPVH: OrderProtocolSignatureVerificationHelper<D, OPM, NI>, Self: Sized;
+    fn verify_view_transfer_message<NI>(network_info: &Arc<NI>,
+                                        header: &Header,
+                                        message: Self::ProtocolMessage) -> Result<Self::ProtocolMessage>
+        where NI: NetworkInformationProvider, Self: Sized;
 }
 
 /// We do not need a serde module since serde serialization is just done on the network level.
