@@ -21,15 +21,15 @@ pub trait DivisibleStateTransfer<S, NT, PL>: StateTransferProtocol<S, NT, PL>
         where Self: Sized;
 
     /// Handle having received a state from the application
-    fn handle_state_desc_received_from_app<V>(&mut self, descriptor: S::StateDescriptor)
+    fn handle_state_desc_received_from_app(&mut self, descriptor: S::StateDescriptor)
                                               -> Result<()>;
 
 
-    fn handle_state_part_received_from_app<V>(&mut self, parts: Vec<S::StatePart>)
+    fn handle_state_part_received_from_app(&mut self, parts: Vec<S::StatePart>)
                                               -> Result<()>;
 
     /// Handle the state being finished
-    fn handle_state_finished_reception<V>(&mut self)
+    fn handle_state_finished_reception(&mut self)
                                           -> Result<()>;
 
 }
