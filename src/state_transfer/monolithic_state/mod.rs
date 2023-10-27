@@ -25,6 +25,5 @@ pub trait MonolithicStateTransfer<S, NT, PL>: StateTransferProtocol<S, NT, PL>
     /// Handle having received a state from the application
     /// you should also notify the ordering protocol that the state has been received
     /// and processed, so he is now safe to delete the state (Maybe this should be handled by the replica?)
-    fn handle_state_received_from_app<V>(&mut self, view: V, state: Arc<ReadOnly<Checkpoint<S>>>) -> Result<()>
-        where V: NetworkView;
+    fn handle_state_received_from_app(&mut self, state: Arc<ReadOnly<Checkpoint<S>>>) -> Result<()>;
 }

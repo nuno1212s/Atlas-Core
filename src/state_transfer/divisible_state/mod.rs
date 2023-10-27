@@ -21,17 +21,15 @@ pub trait DivisibleStateTransfer<S, NT, PL>: StateTransferProtocol<S, NT, PL>
         where Self: Sized;
 
     /// Handle having received a state from the application
-    /// you should also notify the ordering protocol that the state has been received
-    /// and processed, so he is now safe to delete the state (Maybe this should be handled by the replica?)
-    fn handle_state_desc_received_from_app<V>(&mut self, view: V, descriptor: S::StateDescriptor)
-                                              -> Result<()> where V: NetworkView;
+    fn handle_state_desc_received_from_app<V>(&mut self, descriptor: S::StateDescriptor)
+                                              -> Result<()>;
 
 
-    fn handle_state_part_received_from_app<V>(&mut self, view: V, parts: Vec<S::StatePart>)
-                                              -> Result<()> where V: NetworkView;
+    fn handle_state_part_received_from_app<V>(&mut self, parts: Vec<S::StatePart>)
+                                              -> Result<()>;
 
     /// Handle the state being finished
-    fn handle_state_finished_reception<V>(&mut self, view: V)
-                                          -> Result<()> where V: NetworkView;
+    fn handle_state_finished_reception<V>(&mut self)
+                                          -> Result<()>;
 
 }
