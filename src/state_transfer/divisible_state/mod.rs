@@ -13,7 +13,7 @@ pub trait DivisibleStateTransfer<S, NT, PL>: StateTransferProtocol<S, NT, PL>
     where S: DivisibleState + 'static,
           PL: DivisibleStateLog<S> {
     /// The configuration type the state transfer protocol wants to accept
-    type Config;
+    type Config: Send;
 
     /// Initialize the state transferring protocol with the given configuration, timeouts and communication layer
     fn initialize(config: Self::Config, timeouts: Timeouts, node: Arc<NT>, log: PL,

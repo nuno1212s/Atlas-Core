@@ -14,7 +14,7 @@ pub trait MonolithicStateTransfer<S, NT, PL>: StateTransferProtocol<S, NT, PL>
     where S: MonolithicState + 'static,
           PL: MonolithicStateLog<S> {
     /// The configuration type the state transfer protocol wants to accept
-    type Config;
+    type Config: Send;
 
     /// Initialize the state transferring protocol with the given configuration, timeouts and communication layer
     fn initialize(config: Self::Config, timeouts: Timeouts,

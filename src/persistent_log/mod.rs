@@ -45,7 +45,6 @@ pub trait OrderingProtocolLog<D, OP>: Clone where OP: OrderingProtocolMessage<D>
 
     /// Invalidate all messages with sequence number equal to the given one
     fn write_invalidate(&self, write_mode: OperationMode, seq: SeqNo) -> Result<()>;
-
 }
 
 /// The trait necessary for a permission logging protocol capable of simple
@@ -64,7 +63,6 @@ pub trait PersistentDecisionLog<D, OPM, POP, LS>: OrderingProtocolLog<D, OPM>
           OPM: OrderingProtocolMessage<D>,
           POP: PersistentOrderProtocolTypes<D, OPM>,
           LS: DecisionLogMessage<D, OPM, POP> {
-
     /// A checkpoint has been done on the state, so we can clear the current decision log
     fn checkpoint_received(&self, mode: OperationMode, seq: SeqNo) -> Result<()>;
 
@@ -93,13 +91,13 @@ pub trait PersistentDecisionLog<D, OPM, POP, LS>: OrderingProtocolLog<D, OPM>
     /// of further persistence, then the decision should be re returned with
     /// [Some(ProtocolConsensusDecision<D::Request>)]
     fn wait_for_full_persistence(&self, batch: UpdateBatch<D::Request>, decision_logging: LoggingDecision)
-                                              -> Result<Option<UpdateBatch<D::Request>>>;
+                                 -> Result<Option<UpdateBatch<D::Request>>>;
 }
 
 ///
 /// The trait necessary for a logging protocol capable of handling monolithic states.
 ///
-pub trait MonolithicStateLog<S> where S: MonolithicState {
+pub trait MonolithicStateLog<S>: Send where S: MonolithicState {
     /// Read the local checkpoint from the persistent log
     fn read_checkpoint(&self) -> Result<Option<Checkpoint<S>>>;
 
@@ -114,7 +112,7 @@ pub trait MonolithicStateLog<S> where S: MonolithicState {
 ///
 /// The trait necessary for a logging protocol capable of handling divisible states.
 ///
-pub trait DivisibleStateLog<S> where S: DivisibleState {
+pub trait DivisibleStateLog<S>: Send where S: DivisibleState {
     /// Read the descriptor of the local state
     fn read_local_descriptor(&self) -> Result<Option<S::StateDescriptor>>;
 

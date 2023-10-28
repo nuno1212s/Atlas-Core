@@ -11,7 +11,7 @@ use atlas_smr_application::serialize::ApplicationData;
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
 
 /// The basic methods needed for a view
-pub trait NetworkView: Orderable + Clone + Debug {
+pub trait NetworkView: Orderable + Send + Clone + Debug {
     fn primary(&self) -> NodeId;
 
     fn quorum(&self) -> usize;
