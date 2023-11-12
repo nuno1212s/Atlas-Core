@@ -146,7 +146,6 @@ pub trait StateTransferProtocol<S, NT, PL> {
     /// The state transfer protocol then sees if the conditions are met to receive it
     /// (We could still be waiting for a previous checkpoint, for example)
     fn handle_app_state_requested<V>(&mut self,
-                                     view: V,
                                      seq: SeqNo) -> Result<ExecutionResult>
         where V: NetworkView;
 

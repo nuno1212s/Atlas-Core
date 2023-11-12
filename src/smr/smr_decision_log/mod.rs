@@ -225,6 +225,12 @@ pub fn unwrap_shareable_message<T: Clone>(message: ShareableMessage<T>) -> Store
     }
 }
 
+impl<O> Orderable for LoggedDecision<O> {
+    fn sequence_number(&self) -> SeqNo {
+        self.seq
+    }
+}
+
 impl<O> Debug for LoggedDecision<O> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "LoggedDecision {:?}, {} Client Rqs, {:?}", self.seq, self.contained_client_requests.len(), self.decision_value)
