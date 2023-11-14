@@ -20,7 +20,7 @@ use crate::serialize::Service;
 use crate::smr::networking::NodeWrap;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
 
-pub trait LogTransferSendNode<D, OP, LPM> where LPM: LogTransferMessage<D, OP> {
+pub trait LogTransferSendNode<D, OP, LPM> : Send + Sync where LPM: LogTransferMessage<D, OP> {
 
     /// Our own ID
     #[inline(always)]

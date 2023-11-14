@@ -58,7 +58,7 @@ pub trait PermissionedOrderingProtocolLog<POP> where POP: PermissionedOrderingPr
 }
 
 /// The trait that defines the the persistent decision log, so that the decision log can be persistent
-pub trait PersistentDecisionLog<D, OPM, POP, LS>: OrderingProtocolLog<D, OPM>
+pub trait PersistentDecisionLog<D, OPM, POP, LS>: OrderingProtocolLog<D, OPM> + Send
     where D: ApplicationData,
           OPM: OrderingProtocolMessage<D>,
           POP: PersistentOrderProtocolTypes<D, OPM>,

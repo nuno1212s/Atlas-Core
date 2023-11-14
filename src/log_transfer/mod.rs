@@ -60,14 +60,14 @@ pub enum LTPollResult<LT, D: ApplicationData> {
 /// the [DecisionLog], we decided that it makes sense for them to be more tightly coupled.
 ///TODO: Work on Getting partial log installations integrated with this log transfer
 /// trait via [PartiallyWriteableDecLog]
-pub trait LogTransferProtocol<D, OP, DL, NT, PL> where D: ApplicationData + 'static,
+pub trait LogTransferProtocol<D, OP, DL, NT, PL> : Send where D: ApplicationData + 'static,
                                                        OP: LoggableOrderProtocol<D, NT>,
                                                        DL: DecisionLog<D, OP, NT, PL> {
     /// The type which implements StateTransferMessage, to be implemented by the developer
     type Serialization: LogTransferMessage<D, OP::Serialization> + 'static;
 
     /// The configuration type the protocol wants to accept
-    type Config;
+    type Config: Send + 'static;
 
     /// Initialize the log transferring protocol
     fn initialize(config: Self::Config, timeout: Timeouts, node: Arc<NT>, log: PL) -> Result<Self>

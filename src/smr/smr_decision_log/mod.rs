@@ -65,6 +65,9 @@ pub enum LoggingDecision {
 ///
 /// IMPORTANT: Refer to [LoggedDecision<O>] in order to better understand
 /// how to handle logged decision execution
+/// 
+/// Also important, the [Orderable] trait implemented here should return the sequence
+/// number of the last DECIDED decision, not of the ongoing decisions
 ///
 pub trait DecisionLog<D, OP, NT, PL>: Orderable + DecisionLogPersistenceHelper<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>
     where D: ApplicationData + 'static,
@@ -72,7 +75,7 @@ pub trait DecisionLog<D, OP, NT, PL>: Orderable + DecisionLogPersistenceHelper<D
     /// The serialization type containing the serializable parts for the decision log
     type LogSerialization: DecisionLogMessage<D, OP::Serialization, OP::PersistableTypes> + 'static;
 
-    type Config;
+    type Config: Send + 'static;
 
     /// Initialize the decision log of the
     fn initialize_decision_log(config: Self::Config, persistent_log: PL, executor_handle: ExecutorHandle<D>) -> Result<Self>

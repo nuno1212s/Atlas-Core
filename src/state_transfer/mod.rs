@@ -145,9 +145,8 @@ pub trait StateTransferProtocol<S, NT, PL> {
     /// Handle the replica wanting to request a state from the application
     /// The state transfer protocol then sees if the conditions are met to receive it
     /// (We could still be waiting for a previous checkpoint, for example)
-    fn handle_app_state_requested<V>(&mut self,
-                                     seq: SeqNo) -> Result<ExecutionResult>
-        where V: NetworkView;
+    fn handle_app_state_requested(&mut self,
+                                     seq: SeqNo) -> Result<ExecutionResult>;
 
     /// Handle a timeout being received from the timeout layer
     fn handle_timeout<V>(&mut self,
