@@ -57,6 +57,12 @@ pub enum LoggingDecision {
     PartialDecision(SeqNo, Vec<(NodeId, Digest)>),
 }
 
+pub trait RangeOrderable : Orderable {
+
+    fn first_sequence(&self) -> SeqNo;
+
+}
+
 /// The abstraction for the SMR decision log
 /// All SMR systems require this decision log since they function
 /// on a Checkpoint based approach so it naturally requires
@@ -69,7 +75,7 @@ pub enum LoggingDecision {
 /// Also important, the [Orderable] trait implemented here should return the sequence
 /// number of the last DECIDED decision, not of the ongoing decisions
 ///
-pub trait DecisionLog<D, OP, NT, PL>: Orderable + DecisionLogPersistenceHelper<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>
+pub trait DecisionLog<D, OP, NT, PL>: RangeOrderable + DecisionLogPersistenceHelper<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>
     where D: ApplicationData + 'static,
           OP: LoggableOrderProtocol<D, NT> {
     /// The serialization type containing the serializable parts for the decision log
