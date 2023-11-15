@@ -100,7 +100,6 @@ pub trait PermissionedOrderingProtocol: OrderProtocolTolerance {
 }
 
 
-#[derive(Debug)]
 /// A given decision and information about it
 /// To be taken by the replica and processed accordingly
 pub struct Decision<MD, P, O> {
@@ -319,6 +318,12 @@ impl<MD, P, O> Orderable for Decision<MD, P, O> {
     }
 }
 
+impl<MD, P, O> Debug for Decision<MD, P, O> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Decision {:?}. Infos {:?}", self.seq, self.decision_info)
+    }
+}
+
 impl<MD, P, O> DecisionInfo<MD, P, O> {
     pub fn decision_info_from_message(message: MaybeVec<ShareableMessage<P>>) -> MaybeVec<Self> {
         MaybeVec::from_one(Self::PartialDecisionInformation(message))
@@ -458,10 +463,10 @@ impl<MD, D, P> Debug for DecisionInfo<MD, D, P> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             DecisionInfo::DecisionMetadata(_) => {
-                write!(f, "Decision metadata")
+                write!(f, "Decision metadata ")
             }
             DecisionInfo::PartialDecisionInformation(_) => {
-                write!(f, "Partial decision information")
+                write!(f, "Partial dec")
             }
             DecisionInfo::DecisionDone(_) => {
                 write!(f, "Decision Done")}
