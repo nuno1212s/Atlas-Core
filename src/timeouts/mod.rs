@@ -323,15 +323,18 @@ impl<WP, D> TimeoutOrchestrator<WP, D> {
                 }
             }
             ReceivedRequest::Cst(sender, seq) => {
-                self.worker_channel[0].send(TimeoutWorkerMessage::MessagesReceived(ReceivedRequest::Cst(sender, seq)))
+                self.worker_channel[0]
+                    .send(TimeoutWorkerMessage::MessagesReceived(ReceivedRequest::Cst(sender, seq)))
                     .expect("Failed to send worker message");
             }
             ReceivedRequest::LT(sender, seq) => {
-                self.worker_channel[0].send(TimeoutWorkerMessage::MessagesReceived(ReceivedRequest::LT(sender, seq)))
+                self.worker_channel[0]
+                    .send(TimeoutWorkerMessage::MessagesReceived(ReceivedRequest::LT(sender, seq)))
                     .expect("Failed to send worker message");
             }
             ReceivedRequest::Reconfiguration(sender, seq) => {
-                self.worker_channel[0].send(TimeoutWorkerMessage::MessagesReceived(ReceivedRequest::Reconfiguration(sender.clone(), seq)))
+                self.worker_channel[0]
+                    .send(TimeoutWorkerMessage::MessagesReceived(ReceivedRequest::Reconfiguration(sender.clone(), seq)))
                     .expect("Failed to send worker message");
             }
         }
