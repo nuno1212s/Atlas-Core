@@ -10,7 +10,7 @@ use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx, TryRecvError};
 use atlas_common::crypto::hash::Digest;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::SeqNo;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 
 use crate::messages::{ClientRqInfo, Message};
 use crate::request_pre_processing::operation_key_raw;
@@ -65,7 +65,8 @@ pub(super) struct TimeoutWorker {
 
 impl TimeoutWorker {
     pub(super) fn new(worker_id: TimeoutWorkerId, node_id: NodeId, default_timeout: Duration, loopback: ChannelSyncTx<Message>) -> ChannelSyncTx<TimeoutMessage> {
-        let (work_tx, work_rx) = channel::new_bounded_sync(CHANNEL_SIZE);
+        let (work_tx, work_rx) = channel::new_bounded_sync(CHANNEL_SIZE,
+        Some("Timeout Worker Thread"));
 
         let worker = Self {
             my_node_id: node_id,
@@ -189,7 +190,7 @@ impl TimeoutWorker {
                 self.handle_message_timeout_request(message, Some(TimeoutPhase::TimedOut(phase + 1, Instant::now())));
             }
 
-            if let Err(_) = self.loopback_channel.send(Message::Timeout(to_time_out)) {
+            if let Err(_) = self.loopback_channel.send_return(Message::Timeout(to_time_out)) {
                 info!("Loopback channel has disconnected, disconnecting timeouts thread");
             }
         }

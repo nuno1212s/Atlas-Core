@@ -11,7 +11,7 @@ use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::StoredMessage;
 use atlas_communication::protocol_node::ProtocolNetworkNode;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 
 use crate::timeouts::TimedOut;
 
@@ -41,7 +41,7 @@ impl Debug for Message {
 }
 
 #[cfg_attr(feature = "serialize_serde", derive(Serialize, Deserialize))]
-pub enum SystemMessage<D: ApplicationData, P, ST, LT> {
+pub enum SystemMessage<D: ApplicationData, P, ST, LT, VT> {
     ///An ordered request
     OrderedRequest(RequestMessage<D::Request>),
     ///An unordered request
@@ -60,9 +60,11 @@ pub enum SystemMessage<D: ApplicationData, P, ST, LT> {
     StateTransferMessage(StateTransfer<ST>),
     ///A Log trasnfer protocol message
     LogTransferMessage(LogTransfer<LT>),
+    /// View Transfer protocol message
+    ViewTransferMessage(VTMessage<VT>),
 }
 
-impl<D, P, ST, LT> SystemMessage<D, P, ST, LT> where D: ApplicationData {
+impl<D, P, ST, LT, VT> SystemMessage<D, P, ST, LT, VT> where D: ApplicationData {
     pub fn from_protocol_message(msg: P) -> Self {
         SystemMessage::ProtocolMessage(Protocol::new(msg))
     }
@@ -73,6 +75,10 @@ impl<D, P, ST, LT> SystemMessage<D, P, ST, LT> where D: ApplicationData {
 
     pub fn from_log_transfer_message(msg: LT) -> Self {
         SystemMessage::LogTransferMessage(LogTransfer::new(msg))
+    }
+
+    pub fn from_view_transfer_message(msg: VT) -> Self {
+        SystemMessage::ViewTransferMessage(VTMessage::new(msg))
     }
 
     pub fn from_fwd_protocol_message(msg: StoredMessage<Protocol<P>>) -> Self {
@@ -98,7 +104,7 @@ impl<D, P, ST, LT> SystemMessage<D, P, ST, LT> where D: ApplicationData {
             _ => { unreachable!() }
         }
     }
-    
+
     pub fn into_log_transfer_message(self) -> LT {
         match self {
             SystemMessage::LogTransferMessage(l) => {
@@ -107,9 +113,18 @@ impl<D, P, ST, LT> SystemMessage<D, P, ST, LT> where D: ApplicationData {
             _ => { unreachable!() }
         }
     }
+    
+    pub fn into_view_transfer_message(self) -> VT {
+        match self {
+            SystemMessage::ViewTransferMessage(vt) => {
+                vt.into_inner()
+            }
+            _ => { unreachable!() }
+        }
+    }
 }
 
-impl<D, P, ST, LT> Clone for SystemMessage<D, P, ST, LT> where D: ApplicationData, P: Clone, ST: Clone, LT: Clone {
+impl<D, P, ST, LT, VT> Clone for SystemMessage<D, P, ST, LT, VT> where D: ApplicationData, P: Clone, ST: Clone, LT: Clone, VT: Clone {
     fn clone(&self) -> Self {
         match self {
             SystemMessage::OrderedRequest(req) => {
@@ -139,11 +154,18 @@ impl<D, P, ST, LT> Clone for SystemMessage<D, P, ST, LT> where D: ApplicationDat
             SystemMessage::LogTransferMessage(log_transfer) => {
                 SystemMessage::LogTransferMessage(log_transfer.clone())
             }
+            SystemMessage::ViewTransferMessage(view_transfer) => {
+                SystemMessage::ViewTransferMessage(view_transfer.clone())
+            }
         }
     }
 }
 
-impl<D, P, ST, LT> Debug for SystemMessage<D, P, ST, LT> where D: ApplicationData, P: Clone, ST: Clone, LT: Clone {
+impl<D, P, ST, LT, VT> Debug for SystemMessage<D, P, ST, LT, VT>
+    where D: ApplicationData,
+          P: Clone, ST: Clone,
+          LT: Clone, VT: Clone {
+    
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SystemMessage::OrderedRequest(_) => {
@@ -172,6 +194,9 @@ impl<D, P, ST, LT> Debug for SystemMessage<D, P, ST, LT> where D: ApplicationDat
             }
             SystemMessage::LogTransferMessage(_) => {
                 write!(f, "Log transfer message")
+            }
+            SystemMessage::ViewTransferMessage(_) => {
+                write!(f, "View Transfer message")
             }
         }
     }
@@ -345,6 +370,35 @@ impl<P> LogTransfer<P> {
 
 impl<P> Deref for LogTransfer<P> {
     type Target = P;
+
+    fn deref(&self) -> &Self::Target {
+        &self.payload
+    }
+}
+
+///
+/// View Transfer messages
+///
+#[cfg_attr(feature = "serialize_serde", derive(Serialize, Deserialize))]
+#[derive(Clone)]
+pub struct VTMessage<VT> {
+    payload: VT,
+}
+
+impl<VT> VTMessage<VT> {
+    pub fn new(payload: VT) -> Self {
+        Self { payload }
+    }
+
+    pub fn payload(&self) -> &VT { &self.payload }
+
+    pub fn into_inner(self) -> VT {
+        self.payload
+    }
+}
+
+impl<VT> Deref for VTMessage<VT> {
+    type Target = VT;
 
     fn deref(&self) -> &Self::Target {
         &self.payload

@@ -11,16 +11,16 @@ use atlas_communication::message::{SerializedMessage, StoredMessage, StoredSeria
 use atlas_communication::protocol_node::ProtocolNetworkNode;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
 use atlas_communication::serialize::Serializable;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 use crate::log_transfer::networking::serialize::LogTransferMessage;
 
 use crate::messages::SystemMessage;
-use crate::ordering_protocol::networking::serialize::OrderingProtocolMessage;
+use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, ViewTransferProtocolMessage};
 use crate::serialize::Service;
 use crate::smr::networking::NodeWrap;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
 
-pub trait LogTransferSendNode<D, OP, LPM> where LPM: LogTransferMessage<D, OP> {
+pub trait LogTransferSendNode<D, OP, LPM> : Send + Sync where LPM: LogTransferMessage<D, OP> {
 
     /// Our own ID
     #[inline(always)]
@@ -67,14 +67,15 @@ pub trait LogTransferSendNode<D, OP, LPM> where LPM: LogTransferMessage<D, OP> {
     fn broadcast_serialized(&self, messages: BTreeMap<NodeId, StoredSerializedProtocolMessage<LPM::LogTransferMessage>>) -> std::result::Result<(), Vec<NodeId>>;
 }
 
-impl<NT, D, P, S, L, NI, RM> LogTransferSendNode<D, P, L> for NodeWrap<NT, D, P, S, L, NI, RM>
+impl<NT, D, P, S, L, VT, NI, RM> LogTransferSendNode<D, P, L> for NodeWrap<NT, D, P, S, L,VT, NI, RM>
     where D: ApplicationData + 'static,
           P: OrderingProtocolMessage<D> + 'static,
           S: StateTransferMessage + 'static,
           L: LogTransferMessage<D, P> + 'static,
+          VT: ViewTransferProtocolMessage + 'static,
           RM: Serializable + 'static,
           NI: NetworkInformationProvider + 'static,
-          NT: FullNetworkNode<NI, RM, Service<D, P, S, L>>, {
+          NT: FullNetworkNode<NI, RM, Service<D, P, S, L, VT>>, {
     #[inline(always)]
     fn id(&self) -> NodeId {
         self.0.id()

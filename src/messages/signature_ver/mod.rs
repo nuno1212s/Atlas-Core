@@ -1,3 +1,3 @@
 use std::marker::PhantomData;
 
-pub struct SigVerifier<SV, NI, D, OP, ST, LT>(PhantomData<(SV, NI, D, OP, LT, ST)>);
+pub struct SigVerifier<SV, NI, D, OP, ST, LT, VT>(PhantomData<(SV, NI, D, OP, LT, ST, VT)>);

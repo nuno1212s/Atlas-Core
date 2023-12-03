@@ -10,12 +10,11 @@ use atlas_common::globals::ReadOnly;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::StoredMessage;
 use atlas_communication::protocol_node::ProtocolNetworkNode;
-use atlas_execution::serialize::ApplicationData;
+use atlas_smr_application::serialize::ApplicationData;
 
 use crate::messages::StateTransfer;
 use crate::ordering_protocol::{ExecutionResult, OrderingProtocol};
 use crate::ordering_protocol::networking::serialize::NetworkView;
-use crate::persistent_log::StatefulOrderingProtocolLog;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
 use crate::timeouts::RqTimeout;
 
@@ -99,6 +98,14 @@ pub enum STResult {
     StateTransferFinished(SeqNo),
 }
 
+/// The State Transfer Poll result
+pub enum STPollResult<ST> {
+    ReceiveMsg,
+    RePoll,
+    Exec(StoredMessage<ST>),
+    STResult(STResult),
+}
+
 /// The result of processing a message in the state transfer protocol
 pub enum STTimeoutResult {
     RunCst,
@@ -106,6 +113,7 @@ pub enum STTimeoutResult {
 }
 
 pub type CstM<M: StateTransferMessage> = <M as StateTransferMessage>::StateTransferMessage;
+pub type STMsg<M: StateTransferMessage> = <M as StateTransferMessage>::StateTransferMessage;
 
 pub trait StateTransferProtocol<S, NT, PL> {
     /// The type which implements StateTransferMessage, to be implemented by the developer
@@ -115,10 +123,13 @@ pub trait StateTransferProtocol<S, NT, PL> {
     fn request_latest_state<V>(&mut self, view: V) -> Result<()>
         where V: NetworkView;
 
+    /// Poll the state transfer protocol to check if there are any novel messages to receive
+    fn poll(&mut self) -> Result<STPollResult<CstM<Self::Serialization>>>;
+
     /// Handle a state transfer protocol message that was received while executing the ordering protocol
     fn handle_off_ctx_message<V>(&mut self,
                                  view: V,
-                                 message: StoredMessage<StateTransfer<CstM<Self::Serialization>>>)
+                                 message: StoredMessage<CstM<Self::Serialization>>)
                                  -> Result<()>
         where V: NetworkView;
 
@@ -127,17 +138,15 @@ pub trait StateTransferProtocol<S, NT, PL> {
     /// state can be installed (if that's the case)
     fn process_message<V>(&mut self,
                           view: V,
-                          message: StoredMessage<StateTransfer<CstM<Self::Serialization>>>)
+                          message: StoredMessage<CstM<Self::Serialization>>)
                           -> Result<STResult>
         where V: NetworkView;
 
     /// Handle the replica wanting to request a state from the application
     /// The state transfer protocol then sees if the conditions are met to receive it
     /// (We could still be waiting for a previous checkpoint, for example)
-    fn handle_app_state_requested<V>(&mut self,
-                                     view: V,
-                                     seq: SeqNo) -> Result<ExecutionResult>
-        where V: NetworkView;
+    fn handle_app_state_requested(&mut self,
+                                     seq: SeqNo) -> Result<ExecutionResult>;
 
     /// Handle a timeout being received from the timeout layer
     fn handle_timeout<V>(&mut self,
