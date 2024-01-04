@@ -24,11 +24,13 @@ use crate::state_transfer::networking::StateTransferSendNode;
 ///TODO: I wound up creating a whole new layer of abstractions, but I'm not sure they are necessary. I did it
 /// To allow for the protocols to all use NT, as if I didn't, a lot of things would have to change in how the generic NT was
 /// going to be passed around the protocols. I'm not sure if this is the best way to do it, but it works for now.
-pub trait SMRNetworkNode<NI, RM, D, P, S, L, VT>: FullNetworkNode<NI, RM, Service<D, P, S, L, VT>> + ReplyNode<D> +
-StateTransferSendNode<S> + OrderProtocolSendNode<D, P> + LogTransferSendNode<D, P, L> + ViewTransferProtocolSendNode<VT>
+pub trait SMRNetworkNode<NI, RM, D, P, S, L, VT>:
+FullNetworkNode<NI, RM, Service<D, P, S, L, VT>> +
+ReplyNode<D::Reply> + StateTransferSendNode<S> + OrderProtocolSendNode<D::Request, P>
++ LogTransferSendNode<D::Request, P, L> + ViewTransferProtocolSendNode<VT>
     where D: ApplicationData + 'static,
-          P: OrderingProtocolMessage<D> + 'static,
-          L: LogTransferMessage<D, P> + 'static,
+          P: OrderingProtocolMessage<D::Request> + 'static,
+          L: LogTransferMessage<D::Request, P> + 'static,
           S: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           NI: NetworkInformationProvider + 'static,
@@ -37,8 +39,8 @@ StateTransferSendNode<S> + OrderProtocolSendNode<D, P> + LogTransferSendNode<D, 
 #[derive(Clone)]
 pub struct NodeWrap<NT, D, P, S, L, VT, NI, RM>(pub NT, PhantomData<(D, P, S, L, VT, NI, RM)>)
     where D: ApplicationData + 'static,
-          P: OrderingProtocolMessage<D> + 'static,
-          L: LogTransferMessage<D, P> + 'static,
+          P: OrderingProtocolMessage<D::Request> + 'static,
+          L: LogTransferMessage<D::Request, P> + 'static,
           S: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           NI: NetworkInformationProvider + 'static,
@@ -47,8 +49,8 @@ pub struct NodeWrap<NT, D, P, S, L, VT, NI, RM>(pub NT, PhantomData<(D, P, S, L,
 
 impl<NT, D, P, S, L, VT, NI, RM> NodeWrap<NT, D, P, S, L, VT, NI, RM>
     where D: ApplicationData + 'static,
-          P: OrderingProtocolMessage<D> + 'static,
-          L: LogTransferMessage<D, P> + 'static,
+          P: OrderingProtocolMessage<D::Request> + 'static,
+          L: LogTransferMessage<D::Request, P> + 'static,
           S: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           NI: NetworkInformationProvider + 'static,
@@ -61,8 +63,8 @@ impl<NT, D, P, S, L, VT, NI, RM> NodeWrap<NT, D, P, S, L, VT, NI, RM>
 
 impl<NT, D, P, S, L, VT, NI, RM> Deref for NodeWrap<NT, D, P, S, L, VT, NI, RM>
     where D: ApplicationData + 'static,
-          P: OrderingProtocolMessage<D> + 'static,
-          L: LogTransferMessage<D, P> + 'static,
+          P: OrderingProtocolMessage<D::Request> + 'static,
+          L: LogTransferMessage<D::Request, P> + 'static,
           S: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           NI: NetworkInformationProvider + 'static,
@@ -77,8 +79,8 @@ impl<NT, D, P, S, L, VT, NI, RM> Deref for NodeWrap<NT, D, P, S, L, VT, NI, RM>
 
 impl<NT, D, P, S, L, VT, NI, RM> NetworkNode for NodeWrap<NT, D, P, S, L, VT, NI, RM>
     where D: 'static + ApplicationData,
-          P: 'static + OrderingProtocolMessage<D>,
-          L: 'static + LogTransferMessage<D, P>,
+          P: 'static + OrderingProtocolMessage<D::Request>,
+          L: 'static + LogTransferMessage<D::Request, P>,
           VT: ViewTransferProtocolMessage + 'static,
           NI: 'static + NetworkInformationProvider,
           NT: 'static + FullNetworkNode<NI, RM, Service<D, P, S, L, VT>>,
@@ -101,8 +103,8 @@ impl<NT, D, P, S, L, VT, NI, RM> NetworkNode for NodeWrap<NT, D, P, S, L, VT, NI
 
 impl<NT, D, P, S, L, VT, NI, RM> ProtocolNetworkNode<Service<D, P, S, L, VT>> for NodeWrap<NT, D, P, S, L, VT, NI, RM>
     where D: ApplicationData + 'static,
-          P: OrderingProtocolMessage<D> + 'static,
-          L: LogTransferMessage<D, P> + 'static,
+          P: OrderingProtocolMessage<D::Request> + 'static,
+          L: LogTransferMessage<D::Request, P> + 'static,
           S: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           NI: NetworkInformationProvider + 'static,
@@ -145,8 +147,8 @@ impl<NT, D, P, S, L, VT, NI, RM> ReconfigurationNode<RM> for NodeWrap<NT, D, P, 
           RM: Serializable + 'static,
           NT: FullNetworkNode<NI, RM, Service<D, P, S, L, VT>> + 'static,
           D: ApplicationData + 'static,
-          P: OrderingProtocolMessage<D> + 'static,
-          L: LogTransferMessage<D, P> + 'static,
+          P: OrderingProtocolMessage<D::Request> + 'static,
+          L: LogTransferMessage<D::Request, P> + 'static,
           S: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           RM: Serializable + 'static, {
@@ -173,8 +175,8 @@ impl<NT, D, P, S, L, VT, NI, RM> ReconfigurationNode<RM> for NodeWrap<NT, D, P, 
 impl<NT, D, P, S, L, VT, NI, RM> FullNetworkNode<NI, RM, Service<D, P, S, L, VT>> for NodeWrap<NT, D, P, S, L, VT, NI, RM>
     where
         D: ApplicationData + 'static,
-        P: OrderingProtocolMessage<D> + 'static,
-        L: LogTransferMessage<D, P> + 'static,
+        P: OrderingProtocolMessage<D::Request> + 'static,
+        L: LogTransferMessage<D::Request, P> + 'static,
         S: StateTransferMessage + 'static,
         VT: ViewTransferProtocolMessage + 'static,
         RM: Serializable + 'static,
@@ -189,8 +191,8 @@ impl<NT, D, P, S, L, VT, NI, RM> FullNetworkNode<NI, RM, Service<D, P, S, L, VT>
 
 impl<NT, NI, RM, D, P, S, L, VT> SMRNetworkNode<NI, RM, D, P, S, L, VT> for NodeWrap<NT, D, P, S, L, VT, NI, RM>
     where D: ApplicationData + 'static,
-          P: OrderingProtocolMessage<D> + 'static,
-          L: LogTransferMessage<D, P> + 'static,
+          P: OrderingProtocolMessage<D::Request> + 'static,
+          L: LogTransferMessage<D::Request, P> + 'static,
           S: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           NI: NetworkInformationProvider + 'static,

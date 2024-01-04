@@ -18,20 +18,21 @@ pub enum ReplyType {
 }
 
 /// Trait for a network node capable of sending replies to clients
-pub trait ReplyNode<D>: Send + Sync where D: ApplicationData {
-    fn send(&self, reply_type: ReplyType, reply: ReplyMessage<D::Reply>, target: NodeId, flush: bool) -> Result<()>;
+pub trait ReplyNode<RP>: Send + Sync {
 
-    fn send_signed(&self, reply_type: ReplyType, reply: ReplyMessage<D::Reply>, target: NodeId, flush: bool) -> Result<()>;
+    fn send(&self, reply_type: ReplyType, reply: ReplyMessage<RP>, target: NodeId, flush: bool) -> Result<()>;
 
-    fn broadcast(&self, reply_type: ReplyType, reply: ReplyMessage<D::Reply>, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>>;
+    fn send_signed(&self, reply_type: ReplyType, reply: ReplyMessage<RP>, target: NodeId, flush: bool) -> Result<()>;
 
-    fn broadcast_signed(&self, reply_type: ReplyType, reply: ReplyMessage<D::Reply>, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>>;
+    fn broadcast(&self, reply_type: ReplyType, reply: ReplyMessage<RP>, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>>;
+
+    fn broadcast_signed(&self, reply_type: ReplyType, reply: ReplyMessage<RP>, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>>;
 }
 
-impl<NT, D, P, S, L, VT, NI, RM> ReplyNode<D> for NodeWrap<NT, D, P, S, L, VT, NI, RM>
+impl<NT, D, P, S, L, VT, NI, RM> ReplyNode<D::Reply> for NodeWrap<NT, D, P, S, L, VT, NI, RM>
     where D: ApplicationData + 'static,
-          P: OrderingProtocolMessage<D> + 'static,
-          L: LogTransferMessage<D, P> + 'static,
+          P: OrderingProtocolMessage<D::Request> + 'static,
+          L: LogTransferMessage<D::Request, P> + 'static,
           S: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           NI: NetworkInformationProvider + 'static,

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use atlas_common::node_id::NodeId;
 use atlas_common::error::*;
 use atlas_common::ordering::{Orderable, SeqNo};
+use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::Header;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
 use atlas_smr_application::serialize::ApplicationData;
@@ -45,11 +46,8 @@ pub trait PermissionedOrderingProtocolMessage: Send + Sync {
 
 pub trait ViewTransferProtocolMessage: Send + Sync {
     /// The general protocol type for all messages in the View Transfer protocol
-    #[cfg(feature = "serialize_capnp")]
-    type ProtocolMessage: Orderable + Send + Clone;
+    type ProtocolMessage: SerType;
 
-    #[cfg(feature = "serialize_serde")]
-    type ProtocolMessage: for<'a> Deserialize<'a> + Serialize + Send + Clone + Debug;
 
     fn verify_view_transfer_message<NI>(network_info: &Arc<NI>,
                                         header: &Header,
@@ -59,29 +57,21 @@ pub trait ViewTransferProtocolMessage: Send + Sync {
 
 /// We do not need a serde module since serde serialization is just done on the network level.
 /// The abstraction for ordering protocol messages.
-pub trait OrderingProtocolMessage<D>: Send + Sync {
-    /// The general protocol type for all messages in the ordering protocol
-    #[cfg(feature = "serialize_capnp")]
-    type ProtocolMessage: Orderable + Send + Clone;
+pub trait OrderingProtocolMessage<RQ>: Send + Sync {
 
-    #[cfg(feature = "serialize_serde")]
-    type ProtocolMessage: Orderable + for<'a> Deserialize<'a> + Serialize + Send + Clone + Debug;
+    /// The general protocol type for all messages in the ordering protocol
+    type ProtocolMessage: Orderable + SerType;
 
     /// The metadata type for storing the proof in the persistent storage
     /// Since the message will be stored in the persistent storage, it needs to be serializable
     /// This should provide all the necessary final information to assemble the proof from the messages
-    #[cfg(feature = "serialize_capnp")]
-    type ProofMetadata: Orderable + Send + Clone;
-
-    #[cfg(feature = "serialize_serde")]
-    type ProofMetadata: Orderable + for<'a> Deserialize<'a> + Serialize + Send + Clone;
+    type ProofMetadata: Orderable + SerType;
 
     fn verify_order_protocol_message<NI, OPVH>(network_info: &Arc<NI>,
                                                header: &Header,
                                                message: Self::ProtocolMessage) -> Result<Self::ProtocolMessage>
         where NI: NetworkInformationProvider,
-              OPVH: OrderProtocolSignatureVerificationHelper<D, Self, NI>,
-              D: ApplicationData, Self: Sized;
+              OPVH: OrderProtocolSignatureVerificationHelper<RQ, Self, NI>, Self: Sized;
 
     #[cfg(feature = "serialize_capnp")]
     fn serialize_capnp(builder: febft_capnp::consensus_messages_capnp::protocol_message::Builder, msg: &Self::ProtocolMessage) -> Result<()>;

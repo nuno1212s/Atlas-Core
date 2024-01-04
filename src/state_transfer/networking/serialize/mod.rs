@@ -1,19 +1,18 @@
 use std::sync::Arc;
+
 use atlas_common::error::*;
-use serde::{Deserialize, Serialize};
+use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::Header;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
+
 use crate::state_transfer::networking::signature_ver::StateTransferVerificationHelper;
 
 /// The abstraction for state transfer protocol messages.
 /// This allows us to have any state transfer protocol work with the same backbone
 pub trait StateTransferMessage: Send + Sync  {
-    #[cfg(feature = "serialize_capnp")]
-    type StateTransferMessage: Send + Clone;
-
-    #[cfg(feature = "serialize_serde")]
-    type StateTransferMessage: for<'a> Deserialize<'a> + Serialize + Send + Clone;
-
+    
+    type StateTransferMessage: SerType;
+    
     /// Verify the message and return the message if it is valid
     fn verify_state_message<NI, SVH>(network_info: &Arc<NI>,
                                           header: &Header,

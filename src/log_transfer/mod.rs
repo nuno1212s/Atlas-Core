@@ -19,10 +19,10 @@ use crate::timeouts::{RqTimeout, Timeouts};
 
 pub mod networking;
 
-pub type LogTM<D, OP, M: LogTransferMessage<D, OP>> = <M as LogTransferMessage<D, OP>>::LogTransferMessage;
+pub type LogTM<RQ, OP, M: LogTransferMessage<RQ, OP>> = <M as LogTransferMessage<RQ, OP>>::LogTransferMessage;
 
 /// The result of processing a message in the log transfer protocol
-pub enum LTResult<D: ApplicationData> {
+pub enum LTResult<RQ> {
     RunLTP,
     NotNeeded,
     Running,
@@ -34,7 +34,7 @@ pub enum LTResult<D: ApplicationData> {
     /// be proceeded. The requests contained are requests that must be executed by the application
     /// in order to reach the state that corresponds to the decision log
     /// FirstSeq and LastSeq of the installed log downloaded from other replicas and the requests that should be executed
-    LTPFinished(SeqNo, SeqNo, MaybeVec<LoggedDecision<D::Request>>),
+    LTPFinished(SeqNo, SeqNo, MaybeVec<LoggedDecision<RQ>>),
 }
 
 /// Log Transfer protocol timeout result
@@ -44,11 +44,11 @@ pub enum LTTimeoutResult {
 }
 
 /// Log Transfer polling result
-pub enum LTPollResult<LT, D: ApplicationData> {
+pub enum LTPollResult<LT, RQ> {
     ReceiveMsg,
     RePoll,
     Exec(StoredMessage<LT>),
-    LTResult(LTResult<D>),
+    LTResult(LTResult<RQ>),
 }
 
 /// Log transfer protocol.
@@ -63,11 +63,12 @@ pub enum LTPollResult<LT, D: ApplicationData> {
 /// the [DecisionLog], we decided that it makes sense for them to be more tightly coupled.
 ///TODO: Work on Getting partial log installations integrated with this log transfer
 /// trait via [PartiallyWriteableDecLog]
-pub trait LogTransferProtocol<D, OP, DL, NT, PL> : Send where D: ApplicationData + 'static,
-                                                       OP: LoggableOrderProtocol<D, NT>,
-                                                       DL: DecisionLog<D, OP, NT, PL> {
+pub trait LogTransferProtocol<RQ, OP, DL, NT, PL>: Send
+    where OP: LoggableOrderProtocol<RQ, NT>,
+          DL: DecisionLog<RQ, OP, NT, PL> {
+
     /// The type which implements StateTransferMessage, to be implemented by the developer
-    type Serialization: LogTransferMessage<D, OP::Serialization> + 'static;
+    type Serialization: LogTransferMessage<RQ, OP::Serialization> + 'static;
 
     /// The configuration type the protocol wants to accept
     type Config: Send + 'static;
@@ -78,29 +79,29 @@ pub trait LogTransferProtocol<D, OP, DL, NT, PL> : Send where D: ApplicationData
 
     /// Request the latest logs from the rest of the replicas
     fn request_latest_log<V>(&mut self, decision_log: &mut DL, view: V) -> Result<()>
-        where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>,
+        where PL: PersistentDecisionLog<RQ, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>,
               V: NetworkView;
 
     /// Polling method for the log transfer protocol
-    fn poll(&mut self) -> Result<LTPollResult<LogTM<D, OP::Serialization, Self::Serialization>, D>>;
+    fn poll(&mut self) -> Result<LTPollResult<LogTM<RQ, OP::Serialization, Self::Serialization>, RQ>>;
 
     /// Handle a state transfer protocol message that was received while executing the ordering protocol
     fn handle_off_ctx_message<V>(&mut self, decision_log: &mut DL,
                                  view: V,
-                                 message: StoredMessage<LogTM<D, OP::Serialization, Self::Serialization>>)
+                                 message: StoredMessage<LogTM<RQ, OP::Serialization, Self::Serialization>>)
                                  -> Result<()>
-        where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>,
+        where PL: PersistentDecisionLog<RQ, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>,
               V: NetworkView;
 
     /// Process a log transfer protocol message, received from other replicas
     fn process_message<V>(&mut self, decision_log: &mut DL, view: V,
-                          message: StoredMessage<LogTM<D, OP::Serialization, Self::Serialization>>) -> Result<LTResult<D>>
-        where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>,
+                          message: StoredMessage<LogTM<RQ, OP::Serialization, Self::Serialization>>) -> Result<LTResult<RQ>>
+        where PL: PersistentDecisionLog<RQ, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>,
               V: NetworkView;
 
     /// Handle a timeout received from the timeout layer
     fn handle_timeout<V>(&mut self, view: V, timeout: Vec<RqTimeout>) -> Result<LTTimeoutResult>
-        where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>,
+        where PL: PersistentDecisionLog<RQ, OP::Serialization, OP::PersistableTypes, DL::LogSerialization>,
               V: NetworkView;
 }
 

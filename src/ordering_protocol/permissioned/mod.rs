@@ -1,11 +1,12 @@
 use std::sync::Arc;
-use atlas_common::node_id::NodeId;
+
 use atlas_common::error::*;
+use atlas_common::node_id::NodeId;
 use atlas_communication::message::StoredMessage;
-use crate::ordering_protocol::networking::serialize::{PermissionedOrderingProtocolMessage, ViewTransferProtocolMessage};
+
 use crate::ordering_protocol::{OrderingProtocol, PermissionedOrderingProtocol};
+use crate::ordering_protocol::networking::serialize::ViewTransferProtocolMessage;
 use crate::ordering_protocol::networking::ViewTransferProtocolSendNode;
-use crate::ordering_protocol::View;
 use crate::timeouts::RqTimeout;
 
 /// The result of processing a message with the view transfer protocol

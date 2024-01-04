@@ -1,26 +1,24 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use log::info;
 
 #[cfg(feature = "serialize_serde")]
 use serde::{Deserialize, Serialize};
 
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
-use atlas_communication::message::{Header};
+use atlas_communication::message::Header;
 use atlas_communication::message_signing::NetworkMessageSignatureVerifier;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
-use atlas_communication::serialize::{Buf, Serializable};
+use atlas_communication::serialize::Serializable;
 use atlas_smr_application::serialize::ApplicationData;
+
 use crate::log_transfer::networking::serialize::LogTransferMessage;
 use crate::log_transfer::networking::signature_ver::LogTransferVerificationHelper;
-
 use crate::messages::{RequestMessage, SystemMessage};
 use crate::messages::signature_ver::SigVerifier;
 use crate::ordering_protocol::networking::serialize::{NetworkView, OrderingProtocolMessage, OrderProtocolProof, ViewTransferProtocolMessage};
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
-use crate::smr::networking::NodeWrap;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
 use crate::state_transfer::networking::signature_ver::StateTransferVerificationHelper;
 
@@ -37,11 +35,11 @@ pub trait ReconfigurationProtocolMessage: Serializable + Send + Sync {
 }
 
 /// The type that encapsulates all the serializing, so we don't have to constantly use SystemMessage
-pub struct Service<D: ApplicationData, P: OrderingProtocolMessage<D>,
-    S: StateTransferMessage, L: LogTransferMessage<D, P>, VT: ViewTransferProtocolMessage>(PhantomData<(D, P, S, L, VT)>);
+pub struct Service<D: ApplicationData, P: OrderingProtocolMessage<D::Request>,
+    S: StateTransferMessage, L: LogTransferMessage<D::Request, P>, VT: ViewTransferProtocolMessage>(PhantomData<(D, P, S, L, VT)>);
 
-pub type ServiceMessage<D: ApplicationData, P: OrderingProtocolMessage<D>,
-    S: StateTransferMessage, L: LogTransferMessage<D, P>,
+pub type ServiceMessage<D: ApplicationData, P: OrderingProtocolMessage<D::Request>,
+    S: StateTransferMessage, L: LogTransferMessage<D::Request, P>,
     VT: ViewTransferProtocolMessage> = <Service<D, P, S, L, VT> as Serializable>::Message;
 
 pub type ClientServiceMsg<D: ApplicationData> = Service<D, NoProtocol, NoProtocol, NoProtocol, NoProtocol>;
@@ -57,9 +55,9 @@ pub trait VerificationWrapper<M, D> where D: ApplicationData {
 
 impl<D, P, S, L, VT> Serializable for Service<D, P, S, L, VT> where
     D: ApplicationData + 'static,
-    P: OrderingProtocolMessage<D> + 'static,
+    P: OrderingProtocolMessage<D::Request> + 'static,
     S: StateTransferMessage + 'static,
-    L: LogTransferMessage<D, P> + 'static,
+    L: LogTransferMessage<D::Request, P> + 'static,
     VT: ViewTransferProtocolMessage + 'static {
     type Message = SystemMessage<D, P::ProtocolMessage, S::StateTransferMessage, L::LogTransferMessage, VT::ProtocolMessage>;
 
@@ -169,12 +167,14 @@ impl NetworkView for NoView {
     }
 }
 
-impl<D> OrderingProtocolMessage<D> for NoProtocol {
+impl<RQ> OrderingProtocolMessage<RQ> for NoProtocol {
     type ProtocolMessage = ();
 
     type ProofMetadata = ();
 
-    fn verify_order_protocol_message<NI, OPVH>(network_info: &Arc<NI>, header: &Header, message: Self::ProtocolMessage) -> atlas_common::error::Result<Self::ProtocolMessage> where NI: NetworkInformationProvider, OPVH: OrderProtocolSignatureVerificationHelper<D, Self, NI>, D: ApplicationData {
+    fn verify_order_protocol_message<NI, OPVH>(network_info: &Arc<NI>, header: &Header, message: Self::ProtocolMessage)
+                                               -> atlas_common::error::Result<Self::ProtocolMessage> where NI: NetworkInformationProvider,
+                                                                                                           OPVH: OrderProtocolSignatureVerificationHelper<RQ, Self, NI> {
         Ok(message)
     }
 
@@ -217,13 +217,13 @@ impl StateTransferMessage for NoProtocol {
     }
 }
 
-impl<D, P> LogTransferMessage<D, P> for NoProtocol {
+impl<RQ, P> LogTransferMessage<RQ, P> for NoProtocol {
     type LogTransferMessage = ();
 
     fn verify_log_message<NI, LVH>(network_info: &Arc<NI>, header: &Header, message: Self::LogTransferMessage) -> atlas_common::error::Result<Self::LogTransferMessage>
         where NI: NetworkInformationProvider,
-              D: ApplicationData, P: OrderingProtocolMessage<D>,
-              LVH: LogTransferVerificationHelper<D, P, NI>, {
+              P: OrderingProtocolMessage<RQ>,
+              LVH: LogTransferVerificationHelper<RQ, P, NI>, {
         Ok(message)
     }
 
@@ -246,6 +246,7 @@ impl ViewTransferProtocolMessage for NoProtocol {
         Ok(message)
     }
 }
+
 
 impl OrderProtocolProof for () {
     fn contained_messages(&self) -> usize {

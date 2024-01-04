@@ -113,7 +113,7 @@ impl<D, P, ST, LT, VT> SystemMessage<D, P, ST, LT, VT> where D: ApplicationData 
             _ => { unreachable!() }
         }
     }
-    
+
     pub fn into_view_transfer_message(self) -> VT {
         match self {
             SystemMessage::ViewTransferMessage(vt) => {
@@ -165,7 +165,6 @@ impl<D, P, ST, LT, VT> Debug for SystemMessage<D, P, ST, LT, VT>
     where D: ApplicationData,
           P: Clone, ST: Clone,
           LT: Clone, VT: Clone {
-    
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SystemMessage::OrderedRequest(_) => {

@@ -28,18 +28,17 @@ pub mod permissioned;
 
 pub type View<POP: PermissionedOrderingProtocolMessage> = <POP as PermissionedOrderingProtocolMessage>::ViewInfo;
 
-pub type ProtocolMessage<D, OP> = <OP as OrderingProtocolMessage<D>>::ProtocolMessage;
-pub type DecisionMetadata<D, OP> = <OP as OrderingProtocolMessage<D>>::ProofMetadata;
+pub type ProtocolMessage<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProtocolMessage;
+pub type DecisionMetadata<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProofMetadata;
 
-pub struct OrderingProtocolArgs<D, NT>(pub NodeId, pub ExecutorHandle<D>, pub Timeouts,
-                                       pub RequestPreProcessor<D::Request>,
-                                       pub BatchOutput<D::Request>, pub Arc<NT>,
-                                       pub Vec<NodeId>) where D: ApplicationData;
+pub struct OrderingProtocolArgs<R, NT>(pub NodeId, pub Timeouts,
+                                       pub RequestPreProcessor<R>,
+                                       pub BatchOutput<R>, pub Arc<NT>,
+                                       pub Vec<NodeId>);
 
 /// A trait that specifies how many nodes are necessary
 /// in order to tolerate f failures
 pub trait OrderProtocolTolerance {
-
     /// Get the amount of nodes necessary to tolerate f faults
     fn get_n_for_f(f: usize) -> usize;
 
@@ -47,24 +46,27 @@ pub trait OrderProtocolTolerance {
     /// can tolerate
     fn get_quorum_for_n(n: usize) -> usize;
 
-    fn get_f_for_n(n : usize) -> usize;
+    fn get_f_for_n(n: usize) -> usize;
 }
 
 /// The trait for an ordering protocol to be implemented in Atlas
-pub trait OrderingProtocol<D, NT>: OrderProtocolTolerance + Orderable
-    where D: ApplicationData + 'static {
+///
+/// An ordering protocol is meant to order various requests (of type RQ) received
+/// into a globally accepted order in a fault tolerant scenario, which is can then be used by FT applications
+pub trait OrderingProtocol<RQ, NT>: OrderProtocolTolerance + Orderable {
+
     /// The type which implements OrderingProtocolMessage, to be implemented by the developer
-    type Serialization: OrderingProtocolMessage<D> + 'static;
+    type Serialization: OrderingProtocolMessage<RQ> + 'static;
 
     /// The configuration type the protocol wants to accept
     type Config;
 
     /// Initialize this ordering protocol with the given configuration, executor, timeouts and node
-    fn initialize(config: Self::Config, args: OrderingProtocolArgs<D, NT>) -> Result<Self> where
+    fn initialize(config: Self::Config, args: OrderingProtocolArgs<RQ, NT>) -> Result<Self> where
         Self: Sized;
 
     /// Handle a protocol message that was received while we are executing another protocol
-    fn handle_off_ctx_message(&mut self, message: ShareableConsensusMessage<D, Self::Serialization>);
+    fn handle_off_ctx_message(&mut self, message: ShareableConsensusMessage<RQ, Self::Serialization>);
 
     /// Handle the protocol being executed having changed (for example to the state transfer protocol)
     /// This is important for some of the protocols, which need to know when they are being executed or not
@@ -73,18 +75,19 @@ pub trait OrderingProtocol<D, NT>: OrderProtocolTolerance + Orderable
     /// Poll from the ordering protocol in order to know what we should do next
     /// We do this to check if there are already messages waiting to be executed that were received ahead of time and stored.
     /// Or whether we should run state transfer or wait for messages from other replicas
-    fn poll(&mut self) -> Result<OPPollResult<DecisionMetadata<D, Self::Serialization>, ProtocolMessage<D, Self::Serialization>, D::Request>>;
+    fn poll(&mut self) -> Result<OPPollResult<DecisionMetadata<RQ, Self::Serialization>, ProtocolMessage<RQ, Self::Serialization>, RQ>>;
 
     /// Process a protocol message that we have received
     /// This can be a message received from the poll() method or a message received from other replicas.
-    fn process_message(&mut self, message: ShareableConsensusMessage<D, Self::Serialization>)
-                       -> Result<OPExecResult<DecisionMetadata<D, Self::Serialization>, ProtocolMessage<D, Self::Serialization>, D::Request>>;
+    fn process_message(&mut self, message: ShareableConsensusMessage<RQ, Self::Serialization>)
+                       -> Result<OPExecResult<DecisionMetadata<RQ, Self::Serialization>, ProtocolMessage<RQ, Self::Serialization>, RQ>>;
 
     /// Install a given sequence number
     fn install_seq_no(&mut self, seq_no: SeqNo) -> Result<()>;
 
     /// Handle a timeout received from the timeouts layer
-    fn handle_timeout(&mut self, timeout: Vec<RqTimeout>) -> Result<OPExecResult<DecisionMetadata<D, Self::Serialization>, ProtocolMessage<D, Self::Serialization>, D::Request>>;
+    fn handle_timeout(&mut self, timeout: Vec<RqTimeout>)
+                      -> Result<OPExecResult<DecisionMetadata<RQ, Self::Serialization>, ProtocolMessage<RQ, Self::Serialization>, RQ>>;
 }
 
 
@@ -241,7 +244,7 @@ impl<MD, P, O> Decision<MD, P, O> {
 
         Decision {
             seq,
-            decision_info: MaybeOrderedVec::Mult(decision_info)
+            decision_info: MaybeOrderedVec::Mult(decision_info),
         }
     }
 
@@ -469,7 +472,8 @@ impl<MD, D, P> Debug for DecisionInfo<MD, D, P> {
                 write!(f, "Partial dec")
             }
             DecisionInfo::DecisionDone(_) => {
-                write!(f, "Decision Done")}
+                write!(f, "Decision Done")
+            }
         }
     }
 }

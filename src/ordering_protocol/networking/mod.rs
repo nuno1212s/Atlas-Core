@@ -19,7 +19,7 @@ use crate::serialize::Service;
 use crate::smr::networking::NodeWrap;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
 
-pub trait OrderProtocolSendNode<D, OPM>: Send + Sync where D: ApplicationData + 'static, OPM: OrderingProtocolMessage<D> {
+pub trait OrderProtocolSendNode<RQ, OPM>: Send + Sync where OPM: OrderingProtocolMessage<RQ> {
     type NetworkInfoProvider: NetworkInformationProvider + 'static;
 
     fn id(&self) -> NodeId;
@@ -28,7 +28,7 @@ pub trait OrderProtocolSendNode<D, OPM>: Send + Sync where D: ApplicationData + 
     fn network_info_provider(&self) -> &Arc<Self::NetworkInfoProvider>;
 
     /// Forward requests to the given targets
-    fn forward_requests(&self, fwd_requests: ForwardedRequestsMessage<D::Request>, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>> where D: ApplicationData + 'static;
+    fn forward_requests(&self, fwd_requests: ForwardedRequestsMessage<RQ>, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>>;
 
     /// Sends a message to a given target.
     /// Does not block on the message sent. Returns a result that is
@@ -111,10 +111,10 @@ pub trait ViewTransferProtocolSendNode<VT>: Send + Sync where
 }
 
 
-impl<NT, D, P, S, L, VT, RM, NI> OrderProtocolSendNode<D, P> for NodeWrap<NT, D, P, S, L, VT, NI, RM>
+impl<NT, D, P, S, L, VT, RM, NI> OrderProtocolSendNode<D::Request, P> for NodeWrap<NT, D, P, S, L, VT, NI, RM>
     where D: ApplicationData + 'static,
-          P: OrderingProtocolMessage<D> + 'static,
-          L: LogTransferMessage<D, P> + 'static,
+          P: OrderingProtocolMessage<D::Request> + 'static,
+          L: LogTransferMessage<D::Request, P> + 'static,
           S: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           RM: Serializable + 'static,
@@ -131,7 +131,7 @@ impl<NT, D, P, S, L, VT, RM, NI> OrderProtocolSendNode<D, P> for NodeWrap<NT, D,
         NT::network_info_provider(&self.0)
     }
 
-    fn forward_requests(&self, fwd_requests: ForwardedRequestsMessage<D::Request>, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>> where D: ApplicationData + 'static {
+    fn forward_requests(&self, fwd_requests: ForwardedRequestsMessage<D::Request>, targets: impl Iterator<Item=NodeId>) -> std::result::Result<(), Vec<NodeId>> {
         self.0.broadcast_signed(SystemMessage::ForwardedRequestMessage(fwd_requests), targets)
     }
 
@@ -194,8 +194,8 @@ impl<NT, D, P, S, L, VT, RM, NI> OrderProtocolSendNode<D, P> for NodeWrap<NT, D,
 
 impl<NT, D, P, S, L, VT, RM, NI> ViewTransferProtocolSendNode<VT> for NodeWrap<NT, D, P, S, L, VT, NI, RM>
     where D: ApplicationData + 'static,
-          P: OrderingProtocolMessage<D> + 'static,
-          L: LogTransferMessage<D, P> + 'static,
+          P: OrderingProtocolMessage<D::Request> + 'static,
+          L: LogTransferMessage<D::Request, P> + 'static,
           S: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           RM: Serializable + 'static,

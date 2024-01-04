@@ -16,7 +16,7 @@ use crate::smr::smr_decision_log::ShareableConsensusMessage;
 
 /// The trait definining the necessary data types for the ordering protocol to be used
 /// with the decision log
-pub trait PersistentOrderProtocolTypes<D, OPM>: Send + Sync {
+pub trait PersistentOrderProtocolTypes<RQ, OPM>: Send + Sync {
     /// A proof of a given Sequence number in the consensus protocol
     /// This is used as the type to fully represent the validity of a given SeqNo in the protocol
     /// A proof with SeqNo X should mean that X has been decided correctly
@@ -31,51 +31,47 @@ pub trait PersistentOrderProtocolTypes<D, OPM>: Send + Sync {
     fn verify_proof<NI, OPVH>(network_info: &Arc<NI>,
                               proof: Self::Proof) -> Result<Self::Proof>
         where NI: NetworkInformationProvider,
-              D: ApplicationData,
-              OPM: OrderingProtocolMessage<D>,
-              OPVH: OrderProtocolSignatureVerificationHelper<D, OPM, NI>, Self: Sized;
+              OPM: OrderingProtocolMessage<RQ>,
+              OPVH: OrderProtocolSignatureVerificationHelper<RQ, OPM, NI>, Self: Sized;
 }
 
 /// A trait to create a separation between these helper methods and the rest
 /// of the order protocol so that we don't require generics that are not needed
-pub trait OrderProtocolPersistenceHelper<D, OPM, POP>: Send where D: ApplicationData,
-                                                            OPM: OrderingProtocolMessage<D>,
-                                                            POP: PersistentOrderProtocolTypes<D, OPM> {
+pub trait OrderProtocolPersistenceHelper<RQ, OPM, POP>: Send where OPM: OrderingProtocolMessage<RQ>,
+                                                                   POP: PersistentOrderProtocolTypes<RQ, OPM> {
     /// The types of messages to be stored. This is used due to the parallelization described above.
     /// Each of the names provided here will be a different KV-DB instance (in the case of RocksDB, a column family)
     fn message_types() -> Vec<&'static str>;
 
     /// Get the message type for a given message, must correspond to a string returned by
     /// [PersistableOrderProtocol::message_types]
-    fn get_type_for_message(msg: &ProtocolMessage<D, OPM>) -> Result<&'static str>;
+    fn get_type_for_message(msg: &ProtocolMessage<RQ, OPM>) -> Result<&'static str>;
 
     /// Initialize a proof from the metadata and messages stored in persistent storage
-    fn init_proof_from(metadata: DecisionMetadata<D, OPM>,
-                       messages: Vec<StoredMessage<ProtocolMessage<D, OPM>>>)
-                       -> Result<PProof<D, OPM, POP>>;
+    fn init_proof_from(metadata: DecisionMetadata<RQ, OPM>,
+                       messages: Vec<StoredMessage<ProtocolMessage<RQ, OPM>>>)
+                       -> Result<PProof<RQ, OPM, POP>>;
 
     /// Initialize a proof from the metadata and messages stored by the decision log
-    fn init_proof_from_scm(metadata: DecisionMetadata<D, OPM>,
-                           messages: Vec<ShareableConsensusMessage<D, OPM>>)
-                           -> Result<PProof<D, OPM, POP>>;
+    fn init_proof_from_scm(metadata: DecisionMetadata<RQ, OPM>,
+                           messages: Vec<ShareableConsensusMessage<RQ, OPM>>)
+                           -> Result<PProof<RQ, OPM, POP>>;
 
     /// Decompose a given proof into it's metadata and messages, ready to be persisted
-    fn decompose_proof(proof: &PProof<D, OPM, POP>)
-                       -> (&DecisionMetadata<D, OPM>, Vec<&StoredMessage<ProtocolMessage<D, OPM>>>);
+    fn decompose_proof(proof: &PProof<RQ, OPM, POP>)
+                       -> (&DecisionMetadata<RQ, OPM>, Vec<&StoredMessage<ProtocolMessage<RQ, OPM>>>);
 
     /// Extract the proof out of the protocol decision proof
-    fn get_requests_in_proof(proof: &PProof<D, OPM, POP>)
-                             -> Result<ProtocolConsensusDecision<D::Request>>;
+    fn get_requests_in_proof(proof: &PProof<RQ, OPM, POP>)
+                             -> Result<ProtocolConsensusDecision<RQ>>;
 }
 
-pub type PProof<D, OP, POP> = <POP as PersistentOrderProtocolTypes<D, OP>>::Proof;
+pub type PProof<RQ, OP, POP> = <POP as PersistentOrderProtocolTypes<RQ, OP>>::Proof;
 
 /// The trait to define the necessary methods and data types for this order protocol
 /// to be compatible with the decision log
-pub trait LoggableOrderProtocol<D, NT>: OrderingProtocol<D, NT> +
-OrderProtocolPersistenceHelper<D, Self::Serialization, Self::PersistableTypes>
-    where D: ApplicationData + 'static {
-
+pub trait LoggableOrderProtocol<RQ, NT>: OrderingProtocol<RQ, NT>
++ OrderProtocolPersistenceHelper<RQ, Self::Serialization, Self::PersistableTypes> {
     /// The required data types for working with the decision log
-    type PersistableTypes: PersistentOrderProtocolTypes<D, Self::Serialization> + 'static;
+    type PersistableTypes: PersistentOrderProtocolTypes<RQ, Self::Serialization> + 'static;
 }

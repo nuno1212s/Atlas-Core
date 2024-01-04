@@ -31,16 +31,17 @@ pub enum OperationMode {
 pub trait PersistableStateTransferProtocol {}
 
 /// The trait necessary for a persistent log protocol to be used as the persistent log layer
-pub trait OrderingProtocolLog<D, OP>: Clone where OP: OrderingProtocolMessage<D> {
+pub trait OrderingProtocolLog<RQ, OP>: Clone where OP: OrderingProtocolMessage<RQ> {
+    
     /// Write to the persistent log the latest committed sequence number
     fn write_committed_seq_no(&self, write_mode: OperationMode, seq: SeqNo) -> Result<()>;
 
     /// Write a given message to the persistent log
-    fn write_message(&self, write_mode: OperationMode, msg: ShareableConsensusMessage<D, OP>) -> Result<()>;
+    fn write_message(&self, write_mode: OperationMode, msg: ShareableConsensusMessage<RQ, OP>) -> Result<()>;
 
     /// Write the metadata for a given proof to the persistent log
     /// This in combination with the messages for that sequence number should form a valid proof
-    fn write_decision_metadata(&self, write_mode: OperationMode, metadata: DecisionMetadata<D, OP>) -> Result<()>;
+    fn write_decision_metadata(&self, write_mode: OperationMode, metadata: DecisionMetadata<RQ, OP>) -> Result<()>;
 
     /// Invalidate all messages with sequence number equal to the given one
     fn write_invalidate(&self, write_mode: OperationMode, seq: SeqNo) -> Result<()>;
@@ -57,28 +58,27 @@ pub trait PermissionedOrderingProtocolLog<POP> where POP: PermissionedOrderingPr
 }
 
 /// The trait that defines the the persistent decision log, so that the decision log can be persistent
-pub trait PersistentDecisionLog<D, OPM, POP, LS>: OrderingProtocolLog<D, OPM> + Send
-    where D: ApplicationData,
-          OPM: OrderingProtocolMessage<D>,
-          POP: PersistentOrderProtocolTypes<D, OPM>,
-          LS: DecisionLogMessage<D, OPM, POP> {
+pub trait PersistentDecisionLog<RQ, OPM, POP, LS>: OrderingProtocolLog<RQ, OPM> + Send
+    where OPM: OrderingProtocolMessage<RQ>,
+          POP: PersistentOrderProtocolTypes<RQ, OPM>,
+          LS: DecisionLogMessage<RQ, OPM, POP> {
     /// A checkpoint has been done on the state, so we can clear the current decision log
     fn checkpoint_received(&self, mode: OperationMode, seq: SeqNo) -> Result<()>;
 
     /// Write a given proof to the persistent log
-    fn write_proof(&self, write_mode: OperationMode, proof: PProof<D, OPM, POP>) -> Result<()>;
+    fn write_proof(&self, write_mode: OperationMode, proof: PProof<RQ, OPM, POP>) -> Result<()>;
 
     /// Write the metadata of a decision into the persistent log
-    fn write_decision_log_metadata(&self, mode: OperationMode, log_metadata: DecLogMetadata<D, OPM, POP, LS>) -> Result<()>;
+    fn write_decision_log_metadata(&self, mode: OperationMode, log_metadata: DecLogMetadata<RQ, OPM, POP, LS>) -> Result<()>;
 
     /// Write the decision log into the persistent log
-    fn write_decision_log(&self, mode: OperationMode, log: DecLog<D, OPM, POP, LS>) -> Result<()>;
+    fn write_decision_log(&self, mode: OperationMode, log: DecLog<RQ, OPM, POP, LS>) -> Result<()>;
 
     /// Read a proof from the log with the given sequence number
-    fn read_proof(&self, mode: OperationMode, seq: SeqNo) -> Result<Option<PProof<D, OPM, POP>>>;
+    fn read_proof(&self, mode: OperationMode, seq: SeqNo) -> Result<Option<PProof<RQ, OPM, POP>>>;
 
     /// Read the decision log from the persistent storage
-    fn read_decision_log(&self, mode: OperationMode) -> Result<Option<DecLog<D, OPM, POP, LS>>>;
+    fn read_decision_log(&self, mode: OperationMode) -> Result<Option<DecLog<RQ, OPM, POP, LS>>>;
 
     /// Reset the decision log on disk
     fn reset_log(&self, mode: OperationMode) -> Result<()>;
@@ -89,8 +89,8 @@ pub trait PersistentDecisionLog<D, OPM, POP, LS>: OrderingProtocolLog<D, OPM> + 
     /// to the executor, then we want to return [None] on this function. If there is no need
     /// of further persistence, then the decision should be re returned with
     /// [Some(ProtocolConsensusDecision<D::Request>)]
-    fn wait_for_full_persistence(&self, batch: UpdateBatch<D::Request>, decision_logging: LoggingDecision)
-                                 -> Result<Option<UpdateBatch<D::Request>>>;
+    fn wait_for_full_persistence(&self, batch: UpdateBatch<RQ>, decision_logging: LoggingDecision)
+                                 -> Result<Option<UpdateBatch<RQ>>>;
 }
 
 ///

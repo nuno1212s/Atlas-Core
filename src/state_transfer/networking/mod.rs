@@ -60,8 +60,8 @@ pub trait StateTransferSendNode<STM> where STM: StateTransferMessage {
 
 impl<NT, D, P, S, L, VT, NI, RM> StateTransferSendNode<S> for NodeWrap<NT, D, P, S, L, VT, NI, RM>
     where D: ApplicationData + 'static,
-          P: OrderingProtocolMessage<D> + 'static,
-          L: LogTransferMessage<D, P> + 'static,
+          P: OrderingProtocolMessage<D::Request> + 'static,
+          L: LogTransferMessage<D::Request, P> + 'static,
           S: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           RM: Serializable + 'static,
