@@ -37,11 +37,9 @@ pub trait OrderProtocolProof: Orderable {
 }
 
 pub trait PermissionedOrderingProtocolMessage: Send + Sync {
-    #[cfg(feature = "serialize_capnp")]
-    type ViewInfo: NetworkView + Send + Clone;
 
-    #[cfg(feature = "serialize_serde")]
-    type ViewInfo: NetworkView + for<'a> Deserialize<'a> + Serialize + Send + Clone + Debug;
+    type ViewInfo: NetworkView + SerType;
+
 }
 
 pub trait ViewTransferProtocolMessage: Send + Sync {
