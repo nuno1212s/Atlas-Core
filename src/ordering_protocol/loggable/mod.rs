@@ -1,17 +1,17 @@
 use std::fmt::Debug;
 use std::sync::Arc;
+
 #[cfg(feature = "serialize_serde")]
-use ::serde::{Deserialize, Serialize};
-use atlas_common::ordering::{Orderable, SeqNo};
+use ::serde::Serialize;
+
 use atlas_common::error::*;
+use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::StoredMessage;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
-use atlas_smr_application::app::UpdateBatch;
-use atlas_smr_application::serialize::ApplicationData;
-use crate::messages::{ClientRqInfo, StoredRequestMessage};
+
+use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol, ProtocolConsensusDecision, ProtocolMessage};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, OrderProtocolProof};
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
-use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol, ProtocolConsensusDecision, ProtocolMessage};
 use crate::smr::smr_decision_log::ShareableConsensusMessage;
 
 /// The trait definining the necessary data types for the ordering protocol to be used
@@ -21,11 +21,7 @@ pub trait PersistentOrderProtocolTypes<RQ, OPM>: Send + Sync {
     /// This is used as the type to fully represent the validity of a given SeqNo in the protocol
     /// A proof with SeqNo X should mean that X has been decided correctly
     /// This should be composed of some metadata and a set of LoggableMessages
-    #[cfg(feature = "serialize_capnp")]
-    type Proof: OrderProtocolProof + Send + Clone;
-
-    #[cfg(feature = "serialize_serde")]
-    type Proof: OrderProtocolProof + for<'a> Deserialize<'a> + Serialize + Send + Clone;
+    type Proof: OrderProtocolProof + SerType;
 
     /// Verify the validity of the given proof
     fn verify_proof<NI, OPVH>(network_info: &Arc<NI>,
@@ -37,8 +33,10 @@ pub trait PersistentOrderProtocolTypes<RQ, OPM>: Send + Sync {
 
 /// A trait to create a separation between these helper methods and the rest
 /// of the order protocol so that we don't require generics that are not needed
-pub trait OrderProtocolPersistenceHelper<RQ, OPM, POP>: Send where OPM: OrderingProtocolMessage<RQ>,
-                                                                   POP: PersistentOrderProtocolTypes<RQ, OPM> {
+pub trait OrderProtocolPersistenceHelper<RQ, OPM, POP>: Send
+    where RQ: SerType,
+          OPM: OrderingProtocolMessage<RQ>,
+          POP: PersistentOrderProtocolTypes<RQ, OPM> {
     /// The types of messages to be stored. This is used due to the parallelization described above.
     /// Each of the names provided here will be a different KV-DB instance (in the case of RocksDB, a column family)
     fn message_types() -> Vec<&'static str>;
@@ -71,7 +69,8 @@ pub type PProof<RQ, OP, POP> = <POP as PersistentOrderProtocolTypes<RQ, OP>>::Pr
 /// The trait to define the necessary methods and data types for this order protocol
 /// to be compatible with the decision log
 pub trait LoggableOrderProtocol<RQ, NT>: OrderingProtocol<RQ, NT>
-+ OrderProtocolPersistenceHelper<RQ, Self::Serialization, Self::PersistableTypes> {
++ OrderProtocolPersistenceHelper<RQ, Self::Serialization, Self::PersistableTypes>
+    where RQ: SerType, {
     /// The required data types for working with the decision log
-    type PersistableTypes: PersistentOrderProtocolTypes<RQ, Self::Serialization> + 'static;
+    type PersistableTypes: PersistentOrderProtocolTypes<RQ, Self::Serialization>;
 }

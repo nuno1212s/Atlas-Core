@@ -6,6 +6,7 @@ use std::sync::Arc;
 use atlas_common::crypto::hash::Digest;
 use atlas_common::node_id::NodeId;
 use atlas_common::error::*;
+use atlas_common::serialization_helper::SerType;
 use atlas_communication::{FullNetworkNode, NetworkNode};
 use atlas_communication::message::{SerializedMessage, StoredMessage, StoredSerializedProtocolMessage};
 use atlas_communication::protocol_node::ProtocolNetworkNode;
@@ -19,7 +20,7 @@ use crate::serialize::Service;
 use crate::smr::networking::NodeWrap;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
 
-pub trait OrderProtocolSendNode<RQ, OPM>: Send + Sync where OPM: OrderingProtocolMessage<RQ> {
+pub trait OrderProtocolSendNode<RQ, OPM>: Send + Sync where RQ: SerType, OPM: OrderingProtocolMessage<RQ> {
     type NetworkInfoProvider: NetworkInformationProvider + 'static;
 
     fn id(&self) -> NodeId;

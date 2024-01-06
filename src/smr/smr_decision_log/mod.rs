@@ -7,6 +7,7 @@ use atlas_common::globals::ReadOnly;
 use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
+use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::StoredMessage;
 use atlas_smr_application::app::UpdateBatch;
 use atlas_smr_application::ExecutorHandle;
@@ -74,9 +75,9 @@ pub trait RangeOrderable: Orderable {
 /// number of the last DECIDED decision, not of the ongoing decisions
 ///
 pub trait DecisionLog<RQ, OP, NT, PL>: RangeOrderable + DecisionLogPersistenceHelper<RQ, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>
-    where OP: LoggableOrderProtocol<RQ, NT> {
+    where RQ: SerType, OP: LoggableOrderProtocol<RQ, NT> {
     /// The serialization type containing the serializable parts for the decision log
-    type LogSerialization: DecisionLogMessage<RQ, OP::Serialization, OP::PersistableTypes> + 'static;
+    type LogSerialization: DecisionLogMessage<RQ, OP::Serialization, OP::PersistableTypes>;
 
     type Config: Send + 'static;
 
@@ -145,12 +146,12 @@ pub trait DecisionLog<RQ, OP, NT, PL>: RangeOrderable + DecisionLogPersistenceHe
         where PL: PersistentDecisionLog<RQ, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>;
 }
 
-pub trait PartiallyWriteableDecLog<D, OP, NT, PL>: DecisionLog<D, OP, NT, PL>
-    where D: ApplicationData + 'static, OP: LoggableOrderProtocol<D, NT> {
+pub trait PartiallyWriteableDecLog<RQ, OP, NT, PL>: DecisionLog<RQ, OP, NT, PL>
+    where RQ: SerType, OP: LoggableOrderProtocol<RQ, NT> {
     fn start_installing_log(&mut self) -> Result<()>
-        where PL: PersistentDecisionLog<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>;
+        where PL: PersistentDecisionLog<RQ, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>;
 
-    fn install_log_part(&mut self, log_part: DecLogPart<D, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>) -> Result<()>;
+    fn install_log_part(&mut self, log_part: DecLogPart<RQ, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>) -> Result<()>;
 
     fn complete_log_install(&mut self) -> Result<()>;
 }

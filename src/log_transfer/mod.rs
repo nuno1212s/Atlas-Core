@@ -4,6 +4,7 @@ use std::sync::Arc;
 use atlas_common::error::*;
 use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::ordering::SeqNo;
+use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::StoredMessage;
 use atlas_communication::protocol_node::ProtocolNetworkNode;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
@@ -64,11 +65,11 @@ pub enum LTPollResult<LT, RQ> {
 ///TODO: Work on Getting partial log installations integrated with this log transfer
 /// trait via [PartiallyWriteableDecLog]
 pub trait LogTransferProtocol<RQ, OP, DL, NT, PL>: Send
-    where OP: LoggableOrderProtocol<RQ, NT>,
+    where RQ: SerType,
+          OP: LoggableOrderProtocol<RQ, NT>,
           DL: DecisionLog<RQ, OP, NT, PL> {
-
     /// The type which implements StateTransferMessage, to be implemented by the developer
-    type Serialization: LogTransferMessage<RQ, OP::Serialization> + 'static;
+    type Serialization: LogTransferMessage<RQ, OP::Serialization>;
 
     /// The configuration type the protocol wants to accept
     type Config: Send + 'static;
@@ -105,7 +106,7 @@ pub trait LogTransferProtocol<RQ, OP, DL, NT, PL>: Send
               V: NetworkView;
 }
 
-impl<D: ApplicationData> Debug for LTResult<D> {
+impl<RQ: SerType> Debug for LTResult<RQ> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             LTResult::RunLTP => {

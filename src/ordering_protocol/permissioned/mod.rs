@@ -44,7 +44,7 @@ pub type VTMsg<VT> = <VT as ViewTransferProtocolMessage>::ProtocolMessage;
 /// The view change protocol (if applicable) is to be implemented by the
 /// [OrderingProtocol]
 pub trait ViewTransferProtocol<OP, NT> {
-    type Serialization: ViewTransferProtocolMessage + 'static;
+    type Serialization: ViewTransferProtocolMessage;
 
     type Config;
 

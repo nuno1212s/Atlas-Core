@@ -4,6 +4,7 @@ use ::serde::{Deserialize, Serialize};
 use atlas_common::error::*;
 use atlas_common::globals::ReadOnly;
 use atlas_common::ordering::{SeqNo};
+use atlas_common::serialization_helper::SerType;
 use atlas_smr_application::app::UpdateBatch;
 use atlas_smr_application::serialize::ApplicationData;
 use atlas_smr_application::state::divisible_state::DivisibleState;
@@ -31,8 +32,7 @@ pub enum OperationMode {
 pub trait PersistableStateTransferProtocol {}
 
 /// The trait necessary for a persistent log protocol to be used as the persistent log layer
-pub trait OrderingProtocolLog<RQ, OP>: Clone where OP: OrderingProtocolMessage<RQ> {
-    
+pub trait OrderingProtocolLog<RQ, OP>: Clone where RQ: SerType, OP: OrderingProtocolMessage<RQ> {
     /// Write to the persistent log the latest committed sequence number
     fn write_committed_seq_no(&self, write_mode: OperationMode, seq: SeqNo) -> Result<()>;
 
@@ -59,7 +59,8 @@ pub trait PermissionedOrderingProtocolLog<POP> where POP: PermissionedOrderingPr
 
 /// The trait that defines the the persistent decision log, so that the decision log can be persistent
 pub trait PersistentDecisionLog<RQ, OPM, POP, LS>: OrderingProtocolLog<RQ, OPM> + Send
-    where OPM: OrderingProtocolMessage<RQ>,
+    where RQ: SerType,
+          OPM: OrderingProtocolMessage<RQ>,
           POP: PersistentOrderProtocolTypes<RQ, OPM>,
           LS: DecisionLogMessage<RQ, OPM, POP> {
     /// A checkpoint has been done on the state, so we can clear the current decision log
