@@ -6,19 +6,17 @@ use anyhow::anyhow;
 
 use atlas_common::crypto::hash::Digest;
 use atlas_common::error::*;
+use atlas_common::globals::ReadOnly;
 use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::maybe_vec::ordered::{MaybeOrderedVec, MaybeOrderedVecBuilder};
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
-use atlas_smr_application::app::UpdateBatch;
-use atlas_smr_application::ExecutorHandle;
-use atlas_smr_application::serialize::ApplicationData;
+use atlas_communication::message::StoredMessage;
 
 use crate::messages::ClientRqInfo;
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
 use crate::persistent_log::OrderingProtocolLog;
 use crate::request_pre_processing::{BatchOutput, RequestPreProcessor};
-use crate::smr::smr_decision_log::{ShareableConsensusMessage, ShareableMessage};
 use crate::timeouts::{RqTimeout, Timeouts};
 
 pub mod reconfigurable_order_protocol;
@@ -27,6 +25,8 @@ pub mod networking;
 pub mod permissioned;
 
 pub type View<POP: PermissionedOrderingProtocolMessage> = <POP as PermissionedOrderingProtocolMessage>::ViewInfo;
+pub type ShareableConsensusMessage<RQ, OP> = Arc<ReadOnly<StoredMessage<<OP as OrderingProtocolMessage<RQ>>::ProtocolMessage>>>;
+pub type ShareableMessage<P> = Arc<ReadOnly<StoredMessage<P>>>;
 
 pub type ProtocolMessage<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProtocolMessage;
 pub type DecisionMetadata<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProofMetadata;

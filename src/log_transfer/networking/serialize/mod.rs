@@ -13,7 +13,7 @@ use crate::ordering_protocol::networking::serialize::OrderingProtocolMessage;
 pub trait LogTransferMessage<RQ, OP>: Send + Sync {
     
     /// The message type for the log transfer protocol
-    type LogTransferMessage: SerType;
+    type LogTransferMessage: SerType + 'static;
 
     /// Verify the message and return the message if it is valid
     fn verify_log_message<NI, LVH>(network_info: &Arc<NI>,

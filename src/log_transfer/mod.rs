@@ -6,16 +6,12 @@ use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::ordering::SeqNo;
 use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::StoredMessage;
-use atlas_communication::protocol_node::ProtocolNetworkNode;
-use atlas_communication::reconfiguration_node::NetworkInformationProvider;
-use atlas_smr_application::serialize::ApplicationData;
 
 use crate::log_transfer::networking::serialize::LogTransferMessage;
-use crate::ordering_protocol::loggable::{LoggableOrderProtocol, PersistentOrderProtocolTypes};
-use crate::ordering_protocol::networking::serialize::{NetworkView, OrderingProtocolMessage};
-use crate::ordering_protocol::{OrderingProtocol, PermissionedOrderingProtocol};
-use crate::persistent_log::{PersistentDecisionLog};
-use crate::smr::smr_decision_log::{DecisionLog, PartiallyWriteableDecLog, LoggedDecision, ShareableMessage};
+use crate::ordering_protocol::loggable::{LoggableOrderProtocol};
+use crate::ordering_protocol::networking::serialize::{NetworkView};
+use crate::persistent_log::PersistentDecisionLog;
+use crate::smr::smr_decision_log::{DecisionLog, LoggedDecision};
 use crate::timeouts::{RqTimeout, Timeouts};
 
 pub mod networking;

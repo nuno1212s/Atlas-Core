@@ -4,30 +4,23 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use log::error;
-
 use atlas_common::channel;
 use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx, new_bounded_sync, OneShotRx, OneShotTx, RecvError, TryRecvError};
-use atlas_common::crypto::hash::Digest;
-use atlas_common::globals::ReadOnly;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
-use atlas_communication::message::{Header, NetworkMessage, StoredMessage};
+use atlas_communication::message::{Header, StoredMessage};
 use atlas_communication::protocol_node::{NodeIncomingRqHandler, ProtocolNetworkNode};
-use atlas_smr_application::serialize::ApplicationData;
 use atlas_metrics::metrics::{metric_duration, metric_increment};
-use crate::log_transfer::networking::serialize::LogTransferMessage;
 
-use crate::messages::{ClientRqInfo, ForwardedRequestsMessage, RequestMessage, StoredRequestMessage, SystemMessage};
+use crate::messages::{ClientRqInfo, ForwardedRequestsMessage, RequestMessage, StoredRequestMessage};
 use crate::metric::{RQ_PP_CLIENT_COUNT_ID, RQ_PP_CLIENT_MSG_ID, RQ_PP_CLONE_PENDING_TIME_ID, RQ_PP_CLONE_RQS_ID, RQ_PP_COLLECT_PENDING_ID, RQ_PP_COLLECT_PENDING_TIME_ID, RQ_PP_DECIDED_RQS_ID, RQ_PP_FWD_RQS_ID, RQ_PP_TIMEOUT_RQS_ID, RQ_PP_WORKER_PROPOSER_PASSING_TIME_ID, RQ_PP_WORKER_STOPPED_TIME_ID};
-use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, ViewTransferProtocolMessage};
-use crate::request_pre_processing::worker::{PreProcessorWorkMessage, PreProcessorWorkMessageOuter, RequestPreProcessingWorker, RequestPreProcessingWorkerHandle};
-use crate::serialize::Service;
-use crate::state_transfer::networking::serialize::StateTransferMessage;
-use crate::timeouts::{RqTimeout, TimeoutKind, Timeouts};
+use crate::request_pre_processing::network::RequestPreProcessingHandle;
+use crate::request_pre_processing::worker::{PreProcessorWorkMessage, RequestPreProcessingWorkerHandle};
+use crate::timeouts::{RqTimeout, TimeoutKind};
 
 mod worker;
 pub mod work_dividers;
+mod network;
 
 const ORCHESTRATOR_RCV_TIMEOUT: Option<Duration> = Some(Duration::from_micros(50));
 const PROPOSER_QUEUE_SIZE: usize = 16384;
@@ -38,9 +31,9 @@ const RQ_PRE_PROCESSING_ORCHESTRATOR: &str = "RQ-PRE-PROCESSING-ORCHESTRATOR";
 /// This should sign a contract to maintain all client sessions in the same worker, never changing
 /// A session is defined by the client ID and the session ID.
 ///
-pub trait WorkPartitioner<O>: Send {
+pub trait WorkPartitioner<O>: Send where O: Orderable {
     /// Get the worker that should process this request
-    fn get_worker_for(rq_info: &Header, message: &RequestMessage<O>, worker_count: usize) -> usize;
+    fn get_worker_for(rq_info: &Header, message: &O, worker_count: usize) -> usize;
 
     /// Get the worker that should process this request
     fn get_worker_for_processed(rq_info: &ClientRqInfo, worker_count: usize) -> usize;
@@ -123,41 +116,35 @@ impl<O> Deref for RequestPreProcessor<O> {
 
 /// The orchestrator for all of the request pre processing.
 /// Decides which workers will get which requests and then handles the logic necessary
-struct RequestPreProcessingOrchestrator<WD, D, NT> where D: ApplicationData, WD: Send {
+struct RequestPreProcessingOrchestrator<WD, RQ, NT> where WD: Send {
     /// How many workers should we have
     thread_count: usize,
     /// Work message transmission for each worker
-    work_comms: Vec<RequestPreProcessingWorkerHandle<D::Request>>,
+    work_comms: Vec<RequestPreProcessingWorkerHandle<RQ>>,
     /// The RX end for a work channel for the request pre processor
-    work_receiver: ChannelSyncRx<PreProcessorMessage<D::Request>>,
+    work_receiver: ChannelSyncRx<PreProcessorMessage<RQ>>,
     /// The network node so we can poll messages received from the clients
     network_node: Arc<NT>,
     /// How we are going to divide the work between workers
     work_divider: PhantomData<WD>,
 }
 
-impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: ApplicationData + 'static, WD: Send {
-    fn run<OP, ST, LP, VT>(mut self)
-        where NT: ProtocolNetworkNode<Service<D, OP, ST, LP, VT>>,
-              OP: OrderingProtocolMessage<D::Request> + 'static,
-              LP: LogTransferMessage<D::Request, OP> + 'static,
-              ST: StateTransferMessage + 'static,
-              VT: ViewTransferProtocolMessage + 'static,
-              WD: WorkPartitioner<D::Request> {
+impl<WD, RQ, NT> RequestPreProcessingOrchestrator<WD, RQ, NT> where WD: Send {
+    fn run(mut self)
+        where RQ: Orderable,
+              NT: RequestPreProcessingHandle<RQ>,
+              WD: WorkPartitioner<RQ> {
         loop {
-            self.process_client_rqs::<OP, ST, LP, VT>();
+            self.process_client_rqs();
             self.process_work_messages();
         }
     }
 
-    fn process_client_rqs<OP, ST, LP, VT>(&mut self)
-        where NT: ProtocolNetworkNode<Service<D, OP, ST, LP, VT>>,
-              OP: OrderingProtocolMessage<D::Request> + 'static,
-              ST: StateTransferMessage + 'static,
-              LP: LogTransferMessage<D::Request, OP> + 'static,
-              VT: ViewTransferProtocolMessage + 'static,
-              WD: WorkPartitioner<D::Request> {
-        let messages = match self.network_node.node_incoming_rq_handling().receive_from_clients(ORCHESTRATOR_RCV_TIMEOUT) {
+    fn process_client_rqs(&mut self)
+        where RQ: Orderable,
+              NT: RequestPreProcessingHandle<RQ>,
+              WD: WorkPartitioner<RQ> {
+        let messages = match self.network_node.receive_from_clients(ORCHESTRATOR_RCV_TIMEOUT) {
             Ok(message) => {
                 message
             }
@@ -175,25 +162,9 @@ impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: Application
             let mut unordered_worker_message = init_worker_vecs(self.thread_count, messages.len());
 
             for message in messages {
-                let (header, message) = message.into_inner();
+                let worker = WD::get_worker_for(message.header(), message.message(), self.thread_count);
 
-                match message {
-                    SystemMessage::OrderedRequest(req) => {
-                        let worker = WD::get_worker_for(&header, &req, self.thread_count);
-
-                        let stored_message = StoredMessage::new(header, req);
-
-                        worker_message[worker % self.thread_count].push(stored_message);
-                    }
-                    SystemMessage::UnorderedRequest(req) => {
-                        let worker = WD::get_worker_for(&header, &req, self.thread_count);
-
-                        let stored_message = StoredMessage::new(header, req);
-
-                        unordered_worker_message[worker % self.thread_count].push(stored_message);
-                    }
-                    _ => {}
-                }
+                worker_message[worker % self.thread_count].push(message);
             }
 
             for (worker,
@@ -214,7 +185,7 @@ impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: Application
         metric_increment(RQ_PP_CLIENT_COUNT_ID, Some(msg_count as u64));
     }
 
-    fn process_work_messages(&mut self) where WD: WorkPartitioner<D::Request> {
+    fn process_work_messages(&mut self) where WD: WorkPartitioner<RQ> {
         while let Ok(work_recved) = self.work_receiver.try_recv() {
             match work_recved {
                 PreProcessorMessage::ForwardedRequests(fwd_reqs) => {
@@ -239,15 +210,15 @@ impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: Application
         }
     }
 
-    fn process_forwarded_rqs(&self, fwd_reqs: StoredMessage<ForwardedRequestsMessage<D::Request>>)
-        where WD: WorkPartitioner<D::Request> {
+    fn process_forwarded_rqs(&self, fwd_reqs: StoredMessage<ForwardedRequestsMessage<RQ>>)
+        where WD: WorkPartitioner<RQ> {
         let start = Instant::now();
 
         let (header, message) = fwd_reqs.into_inner();
 
         let fwd_reqs = message.into_inner();
 
-        let mut worker_message = init_worker_vecs::<StoredRequestMessage<D::Request>>(self.thread_count, fwd_reqs.len());
+        let mut worker_message = init_worker_vecs::<StoredRequestMessage<RQ>>(self.thread_count, fwd_reqs.len());
 
         for stored_msgs in fwd_reqs {
             let worker = WD::get_worker_for(stored_msgs.header(), stored_msgs.message(), self.thread_count);
@@ -264,7 +235,7 @@ impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: Application
     }
 
     fn process_decided_batch(&self, decided: Vec<ClientRqInfo>)
-        where WD: WorkPartitioner<D::Request> {
+        where WD: WorkPartitioner<RQ> {
         let start = Instant::now();
 
         let mut worker_messages = init_worker_vecs::<ClientRqInfo>(self.thread_count, decided.len());
@@ -284,7 +255,7 @@ impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: Application
     }
 
     fn process_timeouts(&self, timeouts: Vec<RqTimeout>, responder: ChannelSyncTx<(Vec<RqTimeout>, Vec<RqTimeout>)>)
-        where WD: WorkPartitioner<D::Request> {
+        where WD: WorkPartitioner<RQ> {
         let start = Instant::now();
 
         let mut worker_messages = init_worker_vecs(self.thread_count, timeouts.len());
@@ -305,12 +276,12 @@ impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: Application
         metric_duration(RQ_PP_TIMEOUT_RQS_ID, start.elapsed());
     }
 
-    fn collect_pending_rqs(&self, tx: OneShotTx<Vec<StoredRequestMessage<D::Request>>>) {
+    fn collect_pending_rqs(&self, tx: OneShotTx<Vec<StoredRequestMessage<RQ>>>) {
         let start = Instant::now();
 
         let mut worker_responses = init_for_workers(self.thread_count, || channel::new_oneshot_channel());
 
-        let rxs: Vec<OneShotRx<Vec<StoredRequestMessage<D::Request>>>> =
+        let rxs: Vec<OneShotRx<Vec<StoredRequestMessage<RQ>>>> =
             worker_responses.into_iter().enumerate().map(|(worker, (tx, rx))| {
                 self.work_comms[worker].send(PreProcessorWorkMessage::CollectPendingMessages(tx));
 
@@ -331,10 +302,10 @@ impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: Application
     }
 
     /// Process stopped requests by forwarding them to the appropriate worker.
-    fn process_stopped_rqs(&self, rqs: Vec<StoredRequestMessage<D::Request>>) where WD: WorkPartitioner<D::Request> {
+    fn process_stopped_rqs(&self, rqs: Vec<StoredRequestMessage<RQ>>) where WD: WorkPartitioner<RQ> {
         let start = Instant::now();
 
-        let mut worker_message = init_worker_vecs::<StoredRequestMessage<D::Request>>(self.thread_count, rqs.len());
+        let mut worker_message = init_worker_vecs::<StoredRequestMessage<RQ>>(self.thread_count, rqs.len());
 
         for stored_msgs in rqs {
             let worker = WD::get_worker_for(stored_msgs.header(), stored_msgs.message(), self.thread_count);
@@ -350,8 +321,8 @@ impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: Application
         metric_duration(RQ_PP_WORKER_STOPPED_TIME_ID, start.elapsed());
     }
 
-    fn clone_pending_rqs(&self, digests: Vec<ClientRqInfo>, responder: OneShotTx<Vec<StoredRequestMessage<D::Request>>>)
-        where WD: WorkPartitioner<D::Request> {
+    fn clone_pending_rqs(&self, digests: Vec<ClientRqInfo>, responder: OneShotTx<Vec<StoredRequestMessage<RQ>>>)
+        where WD: WorkPartitioner<RQ> {
         let start = Instant::now();
 
         let mut pending_rqs = Vec::with_capacity(digests.len());
@@ -365,7 +336,7 @@ impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: Application
             worker_messages[worker % self.thread_count].push(rq);
         }
 
-        let rxs: Vec<OneShotRx<Vec<StoredRequestMessage<D::Request>>>> = iter::zip(&self.work_comms, iter::zip(worker_messages, worker_responses))
+        let rxs: Vec<OneShotRx<Vec<StoredRequestMessage<RQ>>>> = iter::zip(&self.work_comms, iter::zip(worker_messages, worker_responses))
             .map(|(worker, (messages, (tx, rx)))| {
                 worker.send(PreProcessorWorkMessage::ClonePendingRequests(messages, tx));
 
@@ -385,15 +356,11 @@ impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: Application
 }
 
 
-pub fn initialize_request_pre_processor<WD, D, OP, ST, LP, VT, NT>(concurrency: usize, node: Arc<NT>)
-                                                                   -> (RequestPreProcessor<D::Request>, BatchOutput<D::Request>)
-    where D: ApplicationData + 'static,
-          OP: OrderingProtocolMessage<D::Request> + 'static,
-          LP: LogTransferMessage<D::Request, OP> + 'static,
-          ST: StateTransferMessage + 'static,
-          VT: ViewTransferProtocolMessage + 'static,
-          NT: ProtocolNetworkNode<Service<D, OP, ST, LP, VT>> + 'static,
-          WD: WorkPartitioner<D::Request> + 'static {
+pub fn initialize_request_pre_processor<WD, RQ, NT>(concurrency: usize, node: Arc<NT>)
+                                                    -> (RequestPreProcessor<RQ>, BatchOutput<RQ>)
+    where RQ: Orderable,
+          NT: RequestPreProcessingHandle<RQ>,
+          WD: WorkPartitioner<RQ> + 'static {
     let (batch_tx, receiver) = new_bounded_sync(PROPOSER_QUEUE_SIZE, Some("Pre Processor Batch Output"));
 
     let (work_sender, work_rcvr) = new_bounded_sync(PROPOSER_QUEUE_SIZE, Some("Pre Processor Work handle"));
@@ -406,7 +373,7 @@ pub fn initialize_request_pre_processor<WD, D, OP, ST, LP, VT, NT>(concurrency: 
         work_comms.push(worker_handle);
     }
 
-    let orchestrator = RequestPreProcessingOrchestrator::<WD, D, NT> {
+    let orchestrator = RequestPreProcessingOrchestrator::<WD, RQ, NT> {
         thread_count: concurrency,
         work_comms,
         work_receiver: work_rcvr,
@@ -436,14 +403,9 @@ fn init_worker_vecs<O>(thread_count: usize, message_count: usize) -> Vec<Vec<O>>
     workers
 }
 
-fn launch_orchestrator_thread<WD, D, OP, ST, LP, VT, NT>(orchestrator: RequestPreProcessingOrchestrator<WD, D, NT>)
-    where D: ApplicationData + 'static,
-          OP: OrderingProtocolMessage<D::Request> + 'static,
-          LP: LogTransferMessage<D::Request, OP> + 'static,
-          ST: StateTransferMessage + 'static,
-          VT: ViewTransferProtocolMessage + 'static,
-          NT: ProtocolNetworkNode<Service<D, OP, ST, LP, VT>> + 'static,
-          WD: WorkPartitioner<D::Request> + 'static {
+fn launch_orchestrator_thread<WD, RQ, NT>(orchestrator: RequestPreProcessingOrchestrator<WD, RQ, NT>)
+    where NT: RequestPreProcessingHandle<RQ> + 'static,
+          WD: WorkPartitioner<RQ> + 'static {
     std::thread::Builder::new()
         .name(format!("{}", RQ_PRE_PROCESSING_ORCHESTRATOR))
         .spawn(move || {
