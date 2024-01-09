@@ -69,7 +69,7 @@ pub trait LogTransferProtocol<RQ, OP, DL, NT, PL>: Send
           OP: LoggableOrderProtocol<RQ, NT>,
           DL: DecisionLog<RQ, OP, NT, PL> {
     /// The type which implements StateTransferMessage, to be implemented by the developer
-    type Serialization: LogTransferMessage<RQ, OP::Serialization>;
+    type Serialization: LogTransferMessage<RQ, OP::Serialization> + 'static;
 
     /// The configuration type the protocol wants to accept
     type Config: Send + 'static;

@@ -33,11 +33,11 @@ ReplyNode<D::Reply> + StateTransferSendNode<S> + OrderProtocolSendNode<D::Reques
           L: LogTransferMessage<D::Request, P> + 'static,
           S: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
-          NI: NetworkInformationProvider + 'static,
-          RM: Serializable + 'static {}
+          NI: NetworkInformationProvider,
+          RM: Serializable {}
 
 #[derive(Clone)]
-pub struct NodeWrap<NT, D, P, S, L, VT, NI, RM>(pub NT, PhantomData<(D, P, S, L, VT, NI, RM)>)
+pub struct NodeWrap<NT, D, P, S, L, VT, NI, RM>(pub NT, PhantomData<fn() -> (D, P, S, L, VT, NI, RM)>)
     where D: ApplicationData + 'static,
           P: OrderingProtocolMessage<D::Request> + 'static,
           L: LogTransferMessage<D::Request, P> + 'static,

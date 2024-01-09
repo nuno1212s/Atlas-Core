@@ -56,7 +56,7 @@ pub trait OrderProtocolTolerance {
 pub trait OrderingProtocol<RQ, NT>: OrderProtocolTolerance + Orderable {
 
     /// The type which implements OrderingProtocolMessage, to be implemented by the developer
-    type Serialization: OrderingProtocolMessage<RQ>;
+    type Serialization: OrderingProtocolMessage<RQ> + 'static;
 
     /// The configuration type the protocol wants to accept
     type Config;
@@ -94,7 +94,7 @@ pub trait OrderingProtocol<RQ, NT>: OrderProtocolTolerance + Orderable {
 /// A permissioned ordering protocol, meaning only a select few are actually part of the quorum that decides the
 /// ordering of the operations.
 pub trait PermissionedOrderingProtocol: OrderProtocolTolerance {
-    type PermissionedSerialization: PermissionedOrderingProtocolMessage;
+    type PermissionedSerialization: PermissionedOrderingProtocolMessage + 'static;
 
     /// Get the current view of the ordering protocol
     fn view(&self) -> View<Self::PermissionedSerialization>;

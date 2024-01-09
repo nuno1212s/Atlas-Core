@@ -72,5 +72,5 @@ pub trait LoggableOrderProtocol<RQ, NT>: OrderingProtocol<RQ, NT>
 + OrderProtocolPersistenceHelper<RQ, Self::Serialization, Self::PersistableTypes>
     where RQ: SerType, {
     /// The required data types for working with the decision log
-    type PersistableTypes: PersistentOrderProtocolTypes<RQ, Self::Serialization>;
+    type PersistableTypes: PersistentOrderProtocolTypes<RQ, Self::Serialization> + 'static;
 }

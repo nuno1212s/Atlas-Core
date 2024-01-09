@@ -36,7 +36,7 @@ pub trait ReconfigurationProtocolMessage: Serializable + Send + Sync {
 
 /// The type that encapsulates all the serializing, so we don't have to constantly use SystemMessage
 pub struct Service<D: ApplicationData, P: OrderingProtocolMessage<D::Request>,
-    S: StateTransferMessage, L: LogTransferMessage<D::Request, P>, VT: ViewTransferProtocolMessage>(PhantomData<(D, P, S, L, VT)>);
+    S: StateTransferMessage, L: LogTransferMessage<D::Request, P>, VT: ViewTransferProtocolMessage>(PhantomData<fn() -> (D, P, S, L, VT)>);
 
 pub type ServiceMessage<D: ApplicationData, P: OrderingProtocolMessage<D::Request>,
     S: StateTransferMessage, L: LogTransferMessage<D::Request, P>,

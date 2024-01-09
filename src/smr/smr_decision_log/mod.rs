@@ -77,7 +77,7 @@ pub trait RangeOrderable: Orderable {
 pub trait DecisionLog<RQ, OP, NT, PL>: RangeOrderable + DecisionLogPersistenceHelper<RQ, OP::Serialization, OP::PersistableTypes, Self::LogSerialization>
     where RQ: SerType, OP: LoggableOrderProtocol<RQ, NT> {
     /// The serialization type containing the serializable parts for the decision log
-    type LogSerialization: DecisionLogMessage<RQ, OP::Serialization, OP::PersistableTypes>;
+    type LogSerialization: DecisionLogMessage<RQ, OP::Serialization, OP::PersistableTypes> + 'static;
 
     type Config: Send + 'static;
 
