@@ -10,14 +10,14 @@ use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureV
 use crate::serialize::Service;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
 
-pub trait LogTransferVerificationHelper<D, OP, NI>: OrderProtocolSignatureVerificationHelper<D, OP, NI>
-    where D: ApplicationData, OP: OrderingProtocolMessage<D>, NI: NetworkInformationProvider {}
+pub trait LogTransferVerificationHelper<RQ, OP, NI>: OrderProtocolSignatureVerificationHelper<RQ, OP, NI>
+    where OP: OrderingProtocolMessage<RQ>, NI: NetworkInformationProvider {}
 
-impl<SV, NI, D, OP, ST, LT, VT> LogTransferVerificationHelper<D, OP, NI> for SigVerifier<SV, NI, D, OP, ST, LT, VT>
+impl<SV, NI, D, OP, ST, LT, VT> LogTransferVerificationHelper<D::Request, OP, NI> for SigVerifier<SV, NI, D, OP, ST, LT, VT>
     where D: ApplicationData + 'static,
-          OP: OrderingProtocolMessage<D> + 'static,
+          OP: OrderingProtocolMessage<D::Request> + 'static,
           ST: StateTransferMessage + 'static,
-          LT: LogTransferMessage<D, OP> + 'static,
+          LT: LogTransferMessage<D::Request, OP> + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           NI: NetworkInformationProvider + 'static,
           SV: NetworkMessageSignatureVerifier<Service<D, OP, ST, LT, VT>, NI> {}

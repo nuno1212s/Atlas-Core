@@ -20,7 +20,7 @@ use crate::serialize::Service;
 use crate::smr::networking::NodeWrap;
 use crate::state_transfer::networking::serialize::StateTransferMessage;
 
-pub trait LogTransferSendNode<D, OP, LPM> : Send + Sync where LPM: LogTransferMessage<D, OP> {
+pub trait LogTransferSendNode<RQ, OP, LPM> : Send + Sync where LPM: LogTransferMessage<RQ, OP> {
 
     /// Our own ID
     #[inline(always)]
@@ -67,11 +67,11 @@ pub trait LogTransferSendNode<D, OP, LPM> : Send + Sync where LPM: LogTransferMe
     fn broadcast_serialized(&self, messages: BTreeMap<NodeId, StoredSerializedProtocolMessage<LPM::LogTransferMessage>>) -> std::result::Result<(), Vec<NodeId>>;
 }
 
-impl<NT, D, P, S, L, VT, NI, RM> LogTransferSendNode<D, P, L> for NodeWrap<NT, D, P, S, L,VT, NI, RM>
+impl<NT, D, P, S, L, VT, NI, RM> LogTransferSendNode<D::Request, P, L> for NodeWrap<NT, D, P, S, L,VT, NI, RM>
     where D: ApplicationData + 'static,
-          P: OrderingProtocolMessage<D> + 'static,
+          P: OrderingProtocolMessage<D::Request> + 'static,
           S: StateTransferMessage + 'static,
-          L: LogTransferMessage<D, P> + 'static,
+          L: LogTransferMessage<D::Request, P> + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           RM: Serializable + 'static,
           NI: NetworkInformationProvider + 'static,

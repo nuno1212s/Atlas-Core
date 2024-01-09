@@ -7,9 +7,9 @@ use crate::messages::Protocol;
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
 
 /// The message type of the channel
-pub type FollowerChannelMsg<D, OP, POP> = FollowerEvent<D, OP, POP>;
+pub type FollowerChannelMsg<RQ, OP, POP> = FollowerEvent<RQ, OP, POP>;
 
-pub enum FollowerEvent<D, OP: OrderingProtocolMessage<D>, POP: PermissionedOrderingProtocolMessage> {
+pub enum FollowerEvent<RQ, OP: OrderingProtocolMessage<RQ>, POP: PermissionedOrderingProtocolMessage> {
     ReceivedConsensusMsg(
         POP::ViewInfo,
         Arc<ReadOnly<StoredMessage<Protocol<OP::ProtocolMessage>>>>,
@@ -22,18 +22,18 @@ pub enum FollowerEvent<D, OP: OrderingProtocolMessage<D>, POP: PermissionedOrder
 /// Allows us to pass the thread notifications on what is happening so it
 /// can handle the events properly
 #[derive(Clone)]
-pub struct FollowerHandle<D, OP: OrderingProtocolMessage<D>, POP: PermissionedOrderingProtocolMessage> {
-    tx: ChannelSyncTx<FollowerChannelMsg<D, OP, POP>>,
+pub struct FollowerHandle<RQ, OP: OrderingProtocolMessage<RQ>, POP: PermissionedOrderingProtocolMessage> {
+    tx: ChannelSyncTx<FollowerChannelMsg<RQ, OP, POP>>,
 }
 
-impl<D, OP: OrderingProtocolMessage<D>, POP: PermissionedOrderingProtocolMessage> FollowerHandle<D, OP, POP> {
-    pub fn new(tx: ChannelSyncTx<FollowerChannelMsg<D, OP, POP>>) -> Self {
+impl<RQ, OP: OrderingProtocolMessage<RQ>, POP: PermissionedOrderingProtocolMessage> FollowerHandle<RQ, OP, POP> {
+    pub fn new(tx: ChannelSyncTx<FollowerChannelMsg<RQ, OP, POP>>) -> Self {
         FollowerHandle { tx }
     }
 }
 
-impl<D, OP: OrderingProtocolMessage<D>, POP: PermissionedOrderingProtocolMessage> Deref for FollowerHandle<D, OP, POP> {
-    type Target = ChannelSyncTx<FollowerChannelMsg<D, OP, POP>>;
+impl<RQ, OP: OrderingProtocolMessage<RQ>, POP: PermissionedOrderingProtocolMessage> Deref for FollowerHandle<RQ, OP, POP> {
+    type Target = ChannelSyncTx<FollowerChannelMsg<RQ, OP, POP>>;
 
     fn deref(&self) -> &Self::Target {
         &self.tx

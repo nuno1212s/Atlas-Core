@@ -139,8 +139,8 @@ struct RequestPreProcessingOrchestrator<WD, D, NT> where D: ApplicationData, WD:
 impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: ApplicationData + 'static, WD: Send {
     fn run<OP, ST, LP, VT>(mut self)
         where NT: ProtocolNetworkNode<Service<D, OP, ST, LP, VT>>,
-              OP: OrderingProtocolMessage<D> + 'static,
-              LP: LogTransferMessage<D, OP> + 'static,
+              OP: OrderingProtocolMessage<D::Request> + 'static,
+              LP: LogTransferMessage<D::Request, OP> + 'static,
               ST: StateTransferMessage + 'static,
               VT: ViewTransferProtocolMessage + 'static,
               WD: WorkPartitioner<D::Request> {
@@ -152,9 +152,9 @@ impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: Application
 
     fn process_client_rqs<OP, ST, LP, VT>(&mut self)
         where NT: ProtocolNetworkNode<Service<D, OP, ST, LP, VT>>,
-              OP: OrderingProtocolMessage<D> + 'static,
+              OP: OrderingProtocolMessage<D::Request> + 'static,
               ST: StateTransferMessage + 'static,
-              LP: LogTransferMessage<D, OP> + 'static,
+              LP: LogTransferMessage<D::Request, OP> + 'static,
               VT: ViewTransferProtocolMessage + 'static,
               WD: WorkPartitioner<D::Request> {
         let messages = match self.network_node.node_incoming_rq_handling().receive_from_clients(ORCHESTRATOR_RCV_TIMEOUT) {
@@ -388,8 +388,8 @@ impl<WD, D, NT> RequestPreProcessingOrchestrator<WD, D, NT> where D: Application
 pub fn initialize_request_pre_processor<WD, D, OP, ST, LP, VT, NT>(concurrency: usize, node: Arc<NT>)
                                                                    -> (RequestPreProcessor<D::Request>, BatchOutput<D::Request>)
     where D: ApplicationData + 'static,
-          OP: OrderingProtocolMessage<D> + 'static,
-          LP: LogTransferMessage<D, OP> + 'static,
+          OP: OrderingProtocolMessage<D::Request> + 'static,
+          LP: LogTransferMessage<D::Request, OP> + 'static,
           ST: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           NT: ProtocolNetworkNode<Service<D, OP, ST, LP, VT>> + 'static,
@@ -438,8 +438,8 @@ fn init_worker_vecs<O>(thread_count: usize, message_count: usize) -> Vec<Vec<O>>
 
 fn launch_orchestrator_thread<WD, D, OP, ST, LP, VT, NT>(orchestrator: RequestPreProcessingOrchestrator<WD, D, NT>)
     where D: ApplicationData + 'static,
-          OP: OrderingProtocolMessage<D> + 'static,
-          LP: LogTransferMessage<D, OP> + 'static,
+          OP: OrderingProtocolMessage<D::Request> + 'static,
+          LP: LogTransferMessage<D::Request, OP> + 'static,
           ST: StateTransferMessage + 'static,
           VT: ViewTransferProtocolMessage + 'static,
           NT: ProtocolNetworkNode<Service<D, OP, ST, LP, VT>> + 'static,

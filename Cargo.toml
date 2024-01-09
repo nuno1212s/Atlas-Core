@@ -14,8 +14,8 @@ readme = "README.md"
 
 [features]
 
-serialize_serde = ["serde", "atlas-common/serialize_serde", "atlas-communication/serialize_serde", "atlas-smr-application/serialize_serde"]
-serialize_capnp = ["atlas-capnp"]
+serialize_serde = ["serde", "atlas-common/serialize_serde", "atlas-communication/serialize_serde"]
+serialize_capnp = ["atlas-capnp", "atlas-common/serialize_capnp"]
 
 [dependencies]
 anyhow = "1.0.75"
