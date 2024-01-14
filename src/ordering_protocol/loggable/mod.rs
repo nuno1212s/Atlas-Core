@@ -1,4 +1,3 @@
-use std::fmt::Debug;
 use std::sync::Arc;
 
 #[cfg(feature = "serialize_serde")]
@@ -9,10 +8,9 @@ use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::StoredMessage;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
 
-use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol, ProtocolConsensusDecision, ProtocolMessage};
+use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol, ProtocolConsensusDecision, ProtocolMessage, ShareableConsensusMessage};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, OrderProtocolProof};
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
-use crate::smr::smr_decision_log::ShareableConsensusMessage;
 
 /// The trait definining the necessary data types for the ordering protocol to be used
 /// with the decision log
@@ -21,7 +19,7 @@ pub trait PersistentOrderProtocolTypes<RQ, OPM>: Send + Sync {
     /// This is used as the type to fully represent the validity of a given SeqNo in the protocol
     /// A proof with SeqNo X should mean that X has been decided correctly
     /// This should be composed of some metadata and a set of LoggableMessages
-    type Proof: OrderProtocolProof + SerType;
+    type Proof: OrderProtocolProof + SerType + 'static;
 
     /// Verify the validity of the given proof
     fn verify_proof<NI, OPVH>(network_info: &Arc<NI>,

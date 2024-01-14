@@ -8,7 +8,6 @@ use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::Header;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
-use atlas_smr_application::serialize::ApplicationData;
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
 
 /// The basic methods needed for a view
@@ -22,11 +21,6 @@ pub trait NetworkView: Orderable + Send + Clone + Debug {
     fn f(&self) -> usize;
 
     fn n(&self) -> usize;
-}
-
-pub trait OrderProtocolLog: Orderable {
-    // At the moment I only need orderable, but I might need more in the future
-    fn first_seq(&self) -> Option<SeqNo>;
 }
 
 /// Proof of the order protocol message

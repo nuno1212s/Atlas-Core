@@ -12,8 +12,9 @@ use atlas_common::maybe_vec::ordered::{MaybeOrderedVec, MaybeOrderedVecBuilder};
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::StoredMessage;
+use atlas_metrics::benchmarks::BatchMeta;
 
-use crate::messages::ClientRqInfo;
+use crate::messages::{ClientRqInfo, RequestMessage};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
 use crate::persistent_log::OrderingProtocolLog;
 use crate::request_pre_processing::{BatchOutput, RequestPreProcessor};
@@ -54,7 +55,6 @@ pub trait OrderProtocolTolerance {
 /// An ordering protocol is meant to order various requests (of type RQ) received
 /// into a globally accepted order in a fault tolerant scenario, which is can then be used by FT applications
 pub trait OrderingProtocol<RQ, NT>: OrderProtocolTolerance + Orderable {
-
     /// The type which implements OrderingProtocolMessage, to be implemented by the developer
     type Serialization: OrderingProtocolMessage<RQ> + 'static;
 
@@ -103,6 +103,12 @@ pub trait PermissionedOrderingProtocol: OrderProtocolTolerance {
     fn install_view(&mut self, view: View<Self::PermissionedSerialization>);
 }
 
+/// Containment of a batch of messages
+#[derive(Clone)]
+pub struct BatchedDecision<RQ> {
+    inner: Vec<StoredMessage<RQ>>,
+    meta: Option<BatchMeta>,
+}
 
 /// A given decision and information about it
 /// To be taken by the replica and processed accordingly
@@ -135,7 +141,7 @@ pub struct JoinInfo {
 }
 
 /// The return enum of polling the ordering protocol
-pub enum OPPollResult<MD, P, D> {
+pub enum OPPollResult<MD, P, O> {
     /// The order protocol requires the protocol to update its state to be inline with
     /// the rest of replicas in the system
     RunCst,
@@ -146,9 +152,9 @@ pub enum OPPollResult<MD, P, D> {
     /// but is now ready to be processed
     Exec(ShareableMessage<P>),
     /// The ordered protocol progressed a decision as a result of the poll operation
-    ProgressedDecision(DecisionsAhead, MaybeVec<Decision<MD, P, D>>),
+    ProgressedDecision(DecisionsAhead, MaybeVec<Decision<MD, P, O>>),
     /// The quorum was joined as a result of the poll operation
-    QuorumJoined(DecisionsAhead, Option<MaybeVec<Decision<MD, P, D>>>, JoinInfo),
+    QuorumJoined(DecisionsAhead, Option<MaybeVec<Decision<MD, P, O>>>, JoinInfo),
     /// The order protocol wants to be polled again, for some particular reason
     RePoll,
 }
@@ -163,7 +169,7 @@ pub enum DecisionsAhead {
 
 #[derive(Debug)]
 /// The result of the ordering protocol executing a message
-pub enum OPExecResult<MD, P, D> {
+pub enum OPExecResult<MD, P, O> {
     /// The message we have passed onto the order protocol was dropped
     MessageDropped,
     /// The message we have passed onto the order protocol was queued for later use
@@ -171,10 +177,10 @@ pub enum OPExecResult<MD, P, D> {
     /// The input was processed but there are no new updates to take from it
     MessageProcessedNoUpdate,
     /// The given decisions have been progressed (containing the progress information)
-    ProgressedDecision(DecisionsAhead, MaybeVec<Decision<MD, P, D>>),
+    ProgressedDecision(DecisionsAhead, MaybeVec<Decision<MD, P, O>>),
     /// The quorum has been joined by a given node.
     /// Do we want this to also clear the upcoming decisions?
-    QuorumJoined(DecisionsAhead, Option<MaybeVec<Decision<MD, P, D>>>, JoinInfo),
+    QuorumJoined(DecisionsAhead, Option<MaybeVec<Decision<MD, P, O>>>, JoinInfo),
     /// The order protocol requires the protocol to update its state to be inline with
     /// the rest of replicas in the system
     RunCst,
@@ -207,7 +213,7 @@ pub struct ProtocolConsensusDecision<O> {
     // The client requests information contained in the batch.
     contained_requests: Vec<ClientRqInfo>,
     // The batch of client requests to execute as a result of this protocol
-    executable_batch: UpdateBatch<O>,
+    executable_batch: BatchedDecision<O>,
 }
 
 impl<MD, P, O> Decision<MD, P, O> {
@@ -430,7 +436,7 @@ impl<MD, P, O> Ord for DecisionInfo<MD, P, O> {
 /// Constructor for the ProtocolConsensusDecision struct
 impl<O> ProtocolConsensusDecision<O> {
     pub fn new(seq: SeqNo,
-               executable_batch: UpdateBatch<O>,
+               executable_batch: BatchedDecision<O>,
                client_rqs: Vec<ClientRqInfo>,
                batch_digest: Digest) -> Self {
         ProtocolConsensusDecision {
@@ -441,12 +447,24 @@ impl<O> ProtocolConsensusDecision<O> {
         }
     }
 
-    pub fn into(self) -> (SeqNo, UpdateBatch<O>, Vec<ClientRqInfo>, Digest) {
+    pub fn into(self) -> (SeqNo, BatchedDecision<O>, Vec<ClientRqInfo>, Digest) {
         (self.seq, self.executable_batch, self.contained_requests, self.batch_digest)
     }
 
-    pub fn update_batch(&self) -> &UpdateBatch<O> {
+    pub fn update_batch(&self) -> &BatchedDecision<O> {
         &self.executable_batch
+    }
+}
+
+/// Unwrap a shareable message, avoiding cloning at all costs
+pub fn unwrap_shareable_message<T: Clone>(message: ShareableMessage<T>) -> StoredMessage<T> {
+    match Arc::try_unwrap(message) {
+        Ok(msg) => {
+            msg.into_inner()
+        }
+        Err(pointer) => {
+            (**pointer).clone()
+        }
     }
 }
 
@@ -474,6 +492,55 @@ impl<MD, D, P> Debug for DecisionInfo<MD, D, P> {
             DecisionInfo::DecisionDone(_) => {
                 write!(f, "Decision Done")
             }
+        }
+    }
+}
+
+impl<RQ> BatchedDecision<RQ> {
+    pub fn new(seq: SeqNo, batch: Vec<StoredMessage<RQ>>, meta: Option<BatchMeta>) -> Self {
+        BatchedDecision {
+            inner: batch,
+            meta,
+        }
+    }
+
+    pub fn new_with_cap(seq: SeqNo, capacity: usize) -> Self {
+        BatchedDecision {
+            inner: Vec::with_capacity(capacity),
+            meta: None,
+        }
+    }
+
+    pub fn into_inner(self) -> Vec<StoredMessage<RQ>> {
+        self.inner
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn add_message(&mut self, message: StoredMessage<RQ>) {
+        self.inner.push(message);
+    }
+
+    pub fn meta(&self) -> Option<&BatchMeta> {
+        self.meta.as_ref()
+    }
+
+    pub fn append_batch_meta(&mut self, batch_meta: BatchMeta) {
+        let _ = self.meta.insert(batch_meta);
+    }
+
+    pub fn take_meta(&mut self) -> Option<BatchMeta> {
+        self.meta.take()
+    }
+}
+
+impl<RQ> From<Vec<StoredMessage<RQ>>> for BatchedDecision<RQ> {
+    fn from(value: Vec<StoredMessage<RQ>>) -> Self {
+        BatchedDecision {
+            inner: value,
+            meta: None,
         }
     }
 }

@@ -10,8 +10,6 @@ use atlas_communication::message::Header;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
 use atlas_communication::serialize::Serializable;
 
-use crate::log_transfer::networking::serialize::LogTransferMessage;
-use crate::log_transfer::networking::signature_ver::LogTransferVerificationHelper;
 use crate::ordering_protocol::networking::serialize::{NetworkView, OrderingProtocolMessage, OrderProtocolProof, ViewTransferProtocolMessage};
 use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
 
@@ -96,26 +94,6 @@ impl<RQ> OrderingProtocolMessage<RQ> for NoProtocol {
     }
 }
 
-impl<RQ, P> LogTransferMessage<RQ, P> for NoProtocol {
-    type LogTransferMessage = ();
-
-    fn verify_log_message<NI, LVH>(network_info: &Arc<NI>, header: &Header, message: Self::LogTransferMessage) -> atlas_common::error::Result<Self::LogTransferMessage>
-        where NI: NetworkInformationProvider,
-              P: OrderingProtocolMessage<RQ>,
-              LVH: LogTransferVerificationHelper<RQ, P, NI>, {
-        Ok(message)
-    }
-
-    #[cfg(feature = "serialize_capnp")]
-    fn serialize_capnp(_: febft_capnp::cst_messages_capnp::cst_message::Builder, msg: &Self::LogTransferMessage) -> Result<()> {
-        unimplemented!()
-    }
-
-    #[cfg(feature = "serialize_capnp")]
-    fn deserialize_capnp(_: febft_capnp::cst_messages_capnp::cst_message::Reader) -> Result<Self::LogTransferMessage> {
-        unimplemented!()
-    }
-}
 
 impl ViewTransferProtocolMessage for NoProtocol {
     type ProtocolMessage = ();

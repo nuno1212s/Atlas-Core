@@ -8,10 +8,10 @@ use atlas_common::collections::HashMap;
 use atlas_common::crypto::hash::Digest;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
-use atlas_communication::message::Header;
+use atlas_communication::message::{Header, StoredMessage};
 use atlas_metrics::metrics::{metric_duration, metric_increment};
 
-use crate::messages::{ClientRqInfo, RequestMessage, StoredRequestMessage};
+use crate::messages::{ClientRqInfo, SessionBased};
 use crate::metric::{RQ_PP_ORCHESTRATOR_WORKER_PASSING_TIME_ID, RQ_PP_WORKER_DECIDED_PROCESS_TIME_ID, RQ_PP_WORKER_ORDER_PROCESS_COUNT_ID, RQ_PP_WORKER_ORDER_PROCESS_ID};
 use crate::request_pre_processing::{operation_key, operation_key_raw, PreProcessorOutput, PreProcessorOutputMessage};
 use crate::timeouts::{RqTimeout, TimeoutKind};
@@ -24,20 +24,20 @@ pub type PreProcessorWorkMessageOuter<O> = (Instant, PreProcessorWorkMessage<O>)
 pub enum PreProcessorWorkMessage<O> {
     /// We have received requests from the clients, which need
     /// to be processed
-    ClientPoolOrderedRequestsReceived(Vec<StoredRequestMessage<O>>),
+    ClientPoolOrderedRequestsReceived(Vec<StoredMessage<O>>),
     /// Client pool requests received
-    ClientPoolUnorderedRequestsReceived(Vec<StoredRequestMessage<O>>),
+    ClientPoolUnorderedRequestsReceived(Vec<StoredMessage<O>>),
     /// Received requests that were forwarded from other replicas
-    ForwardedRequestsReceived(Vec<StoredRequestMessage<O>>),
-    StoppedRequestsReceived(Vec<StoredRequestMessage<O>>),
+    ForwardedRequestsReceived(Vec<StoredMessage<O>>),
+    StoppedRequestsReceived(Vec<StoredMessage<O>>),
     /// Analyse timeout requests. Returns only timeouts that have not yet been executed
     TimeoutsReceived(Vec<RqTimeout>, ChannelSyncTx<(Vec<RqTimeout>, Vec<RqTimeout>)>),
     /// A batch of requests has been decided by the system
     DecidedBatch(Vec<ClientRqInfo>),
     /// Collect all pending messages from the given worker
-    CollectPendingMessages(OneShotTx<Vec<StoredRequestMessage<O>>>),
+    CollectPendingMessages(OneShotTx<Vec<StoredMessage<O>>>),
     /// Clone a set of given pending requests
-    ClonePendingRequests(Vec<ClientRqInfo>, OneShotTx<Vec<StoredRequestMessage<O>>>),
+    ClonePendingRequests(Vec<ClientRqInfo>, OneShotTx<Vec<StoredMessage<O>>>),
     /// Remove all requests associated with this client (due to a disconnection, for example)
     CleanClient(NodeId),
 }
@@ -56,11 +56,11 @@ pub struct RequestPreProcessingWorker<O> {
     /// we can use this to filter out duplicates.
     latest_ops: IntMap<(SeqNo, Option<Digest>)>,
     /// The requests that have not been added to a batch yet.
-    pending_requests: HashMap<Digest, StoredRequestMessage<O>>,
+    pending_requests: HashMap<Digest, StoredMessage<O>>,
 }
 
 
-impl<O> RequestPreProcessingWorker<O> where O: Clone {
+impl<O> RequestPreProcessingWorker<O> where O: SessionBased + Clone {
     pub fn new(worker_id: usize, message_rx: ChannelSyncRx<PreProcessorWorkMessageOuter<O>>, batch_production: ChannelSyncTx<PreProcessorOutput<O>>) -> Self {
         Self {
             worker_id,
@@ -112,7 +112,7 @@ impl<O> RequestPreProcessingWorker<O> where O: Clone {
     }
 
     /// Checks if we have received a more recent message for a given client/session combo
-    fn has_received_more_recent_and_update(&mut self, header: &Header, message: &RequestMessage<O>, unique_digest: &Digest) -> bool {
+    fn has_received_more_recent_and_update(&mut self, header: &Header, message: &O, unique_digest: &Digest) -> bool {
         let key = operation_key::<O>(header, message);
 
         let (seq_no, digest) = {
@@ -155,12 +155,12 @@ impl<O> RequestPreProcessingWorker<O> where O: Clone {
     }
 
     /// Process the ordered client pool requests
-    fn process_ordered_client_pool_requests(&mut self, requests: Vec<StoredRequestMessage<O>>) {
+    fn process_ordered_client_pool_requests(&mut self, requests: Vec<StoredMessage<O>>) {
         let start = Instant::now();
 
         let processed_rqs = requests.len();
 
-        let requests: Vec<StoredRequestMessage<O>> = requests.into_iter().filter(|request| {
+        let requests: Vec<StoredMessage<O>> = requests.into_iter().filter(|request| {
             let digest = request.header().unique_digest();
 
             if self.has_received_more_recent_and_update(request.header(), request.message(), &digest) {
@@ -183,8 +183,8 @@ impl<O> RequestPreProcessingWorker<O> where O: Clone {
     }
 
     /// Process the unordered client pool requests
-    fn process_unordered_client_pool_rqs(&mut self, requests: Vec<StoredRequestMessage<O>>) {
-        let requests: Vec<StoredRequestMessage<O>> = requests.into_iter().filter(|request| {
+    fn process_unordered_client_pool_rqs(&mut self, requests: Vec<StoredMessage<O>>) {
+        let requests: Vec<StoredMessage<O>> = requests.into_iter().filter(|request| {
             let digest = request.header().unique_digest();
 
             if self.has_received_more_recent_and_update(request.header(), request.message(), &digest) {
@@ -202,10 +202,10 @@ impl<O> RequestPreProcessingWorker<O> where O: Clone {
     }
 
     /// Process the forwarded requests
-    fn process_forwarded_requests(&mut self, requests: Vec<StoredRequestMessage<O>>) {
+    fn process_forwarded_requests(&mut self, requests: Vec<StoredMessage<O>>) {
         let initial_size = requests.len();
 
-        let requests: Vec<StoredRequestMessage<O>> = requests.into_iter().filter(|request| {
+        let requests: Vec<StoredMessage<O>> = requests.into_iter().filter(|request| {
             let digest = request.header().unique_digest();
 
             if self.has_received_more_recent_and_update(request.header(), request.message(), &digest) {
@@ -217,7 +217,7 @@ impl<O> RequestPreProcessingWorker<O> where O: Clone {
             return true;
         }).collect();
 
-        debug!("Worker {} // Forwarded requests processed, out of {} left with {:?}", self.worker_id, initial_size, requests);
+        debug!("Worker {} // Forwarded requests processed, out of {} left with {:?}", self.worker_id, initial_size, requests.len());
 
         if !requests.is_empty() {
             if let Err(err) = self.batch_production.try_send_return((PreProcessorOutputMessage::DeDupedOrderedRequests(requests), Instant::now())) {
@@ -279,7 +279,7 @@ impl<O> RequestPreProcessingWorker<O> where O: Clone {
     }
 
     /// Clone a set of pending requests
-    fn clone_pending_requests(&self, requests: Vec<ClientRqInfo>, responder: OneShotTx<Vec<StoredRequestMessage<O>>>) {
+    fn clone_pending_requests(&self, requests: Vec<ClientRqInfo>, responder: OneShotTx<Vec<StoredMessage<O>>>) {
         let mut final_rqs = Vec::with_capacity(requests.len());
 
         for rq_info in requests {
@@ -292,7 +292,7 @@ impl<O> RequestPreProcessingWorker<O> where O: Clone {
     }
 
     /// Collect all pending requests stored in this worker
-    fn collect_pending_requests(&mut self) -> Vec<StoredRequestMessage<O>> {
+    fn collect_pending_requests(&mut self) -> Vec<StoredMessage<O>> {
         std::mem::replace(&mut self.pending_requests, Default::default())
             .into_iter().map(|(_, request)| request).collect()
     }
@@ -301,7 +301,7 @@ impl<O> RequestPreProcessingWorker<O> where O: Clone {
         todo!()
     }
 
-    fn stopped_requests(&mut self, requests: Vec<StoredRequestMessage<O>>) {
+    fn stopped_requests(&mut self, requests: Vec<StoredMessage<O>>) {
         requests.into_iter().for_each(|request| {
             let digest = request.header().unique_digest();
 
@@ -315,8 +315,8 @@ impl<O> RequestPreProcessingWorker<O> where O: Clone {
 }
 
 pub(super) fn spawn_worker<O>(worker_id: usize, batch_tx: ChannelSyncTx<(PreProcessorOutputMessage<O>, Instant)>) -> RequestPreProcessingWorkerHandle<O>
-    where O: Clone + Send + 'static {
-    let (worker_tx, worker_rx) = atlas_common::channel::new_bounded_sync(WORKER_QUEUE_SIZE, 
+    where O: Clone + SessionBased + Send + 'static {
+    let (worker_tx, worker_rx) = atlas_common::channel::new_bounded_sync(WORKER_QUEUE_SIZE,
                                                                          Some(format!("Worker Handle {}", worker_id).as_str()));
 
     let worker = RequestPreProcessingWorker::new(worker_id, worker_rx, batch_tx);

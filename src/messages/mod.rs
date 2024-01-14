@@ -12,47 +12,24 @@ use atlas_communication::message::StoredMessage;
 
 use crate::timeouts::TimedOut;
 
-/// The `Message` type encompasses all the messages traded between different
-/// asynchronous tasks in the system.
-///
-pub enum Message {
-    /// We received a timeout from the timeouts layer.
-    Timeout(TimedOut),
-    /// Timeouts that have already been processed by the request pre processing layer.
-    ProcessedTimeout(TimedOut, TimedOut),
-}
-
-impl Debug for Message {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Message::Timeout(_) => {
-                write!(f, "timeout")
-            }
-            Message::ProcessedTimeout(_, _) => {
-                write!(f, "Digested Timeouts")
-            }
-        }
-    }
-}
-
-
-#[derive(Eq, PartialEq, Ord, Clone, PartialOrd, Debug)]
-pub struct ClientRqInfo {
-    //The UNIQUE digest of the request in question
-    pub digest: Digest,
-
-    // The sender, sequence number and session number
-    pub sender: NodeId,
-    pub seq_no: SeqNo,
-    pub session: SeqNo,
-}
-
 pub type StoredRequestMessage<O> = StoredMessage<RequestMessage<O>>;
+
+
+/// A trait that indicates that the requests in question are separated into sessions
+pub trait SessionBased: Orderable {
+    /// Obtain the session number of the object
+    fn session_number(&self) -> SeqNo;
+}
 
 /// Represents a request from a client.
 ///
 /// The `O` type argument symbolizes the client operation to be performed
 /// over the replicated state.
+///
+/// This type encapsulates the session id and the operation id, used
+/// by the clients to identify the request (and respective reply).
+///
+/// Follows [SessionBased]
 #[cfg_attr(feature = "serialize_serde", derive(Serialize, Deserialize))]
 #[derive(Clone)]
 pub struct RequestMessage<O> {
@@ -64,6 +41,11 @@ pub struct RequestMessage<O> {
 /// Represents a reply to a client.
 ///
 /// The `P` type argument symbolizes the response payload.
+///
+/// This type encapsulates the session id and the operation id, used
+/// by the clients to identify the request (and respective reply).
+///
+/// Follows [SessionBased]
 #[cfg_attr(feature = "serialize_serde", derive(Serialize, Deserialize))]
 #[derive(Clone)]
 pub struct ReplyMessage<P> {
@@ -99,6 +81,12 @@ impl<O> RequestMessage<O> {
     }
 }
 
+impl<O> Debug for RequestMessage<O> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Session: {:?} Seq No: {:?}", self.session_id, self.sequence_number())
+    }
+}
+
 impl<P> Orderable for ReplyMessage<P> {
     fn sequence_number(&self) -> SeqNo {
         self.operation_id
@@ -126,6 +114,43 @@ impl<P> ReplyMessage<P> {
     }
 }
 
+/// The `Message` type encompasses all the messages traded between different
+/// asynchronous tasks in the system.
+///
+pub enum Message {
+    /// We received a timeout from the timeouts layer.
+    Timeout(TimedOut),
+    /// Timeouts that have already been processed by the request pre processing layer.
+    ProcessedTimeout(TimedOut, TimedOut),
+}
+
+impl Debug for Message {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Message::Timeout(_) => {
+                write!(f, "timeout")
+            }
+            Message::ProcessedTimeout(_, _) => {
+                write!(f, "Digested Timeouts")
+            }
+        }
+    }
+}
+
+
+#[derive(Eq, PartialEq, Ord, Clone, PartialOrd, Debug)]
+pub struct ClientRqInfo {
+    //The UNIQUE digest of the request in question
+    pub digest: Digest,
+
+    // The sender, sequence number and session number
+    pub sender: NodeId,
+    pub seq_no: SeqNo,
+    pub session: SeqNo,
+}
+
+
+/// A wrapper for protocol messages
 #[cfg_attr(feature = "serialize_serde", derive(Serialize, Deserialize))]
 #[derive(Clone)]
 pub struct Protocol<P> {
@@ -145,35 +170,6 @@ impl<P> Protocol<P> {
 }
 
 impl<P> Deref for Protocol<P> {
-    type Target = P;
-
-    fn deref(&self) -> &Self::Target {
-        &self.payload
-    }
-}
-
-///
-/// Log transfer messages
-///
-#[cfg_attr(feature = "serialize_serde", derive(Serialize, Deserialize))]
-#[derive(Clone)]
-pub struct LogTransfer<P> {
-    payload: P,
-}
-
-impl<P> LogTransfer<P> {
-    pub fn new(payload: P) -> Self {
-        Self { payload }
-    }
-
-    pub fn payload(&self) -> &P { &self.payload }
-
-    pub fn into_inner(self) -> P {
-        self.payload
-    }
-}
-
-impl<P> Deref for LogTransfer<P> {
     type Target = P;
 
     fn deref(&self) -> &Self::Target {
@@ -217,21 +213,21 @@ impl<VT> Deref for VTMessage<VT> {
 #[cfg_attr(feature = "serialize_serde", derive(Serialize, Deserialize))]
 #[derive(Clone)]
 pub struct ForwardedRequestsMessage<O> {
-    inner: Vec<StoredRequestMessage<O>>,
+    inner: Vec<StoredMessage<O>>,
 }
 
 impl<O> ForwardedRequestsMessage<O> {
     /// Creates a new `ForwardedRequestsMessage`, containing the given client requests.
-    pub fn new(inner: Vec<StoredRequestMessage<O>>) -> Self {
+    pub fn new(inner: Vec<StoredMessage<O>>) -> Self {
         Self { inner }
     }
 
-    pub fn requests(&self) -> &Vec<StoredRequestMessage<O>> { &self.inner }
+    pub fn requests(&self) -> &Vec<StoredMessage<O>> { &self.inner }
 
-    pub fn mut_requests(&mut self) -> &mut Vec<StoredRequestMessage<O>> { &mut self.inner }
+    pub fn mut_requests(&mut self) -> &mut Vec<StoredMessage<O>> { &mut self.inner }
 
     /// Returns the client requests contained in this `ForwardedRequestsMessage`.
-    pub fn into_inner(self) -> Vec<StoredRequestMessage<O>> {
+    pub fn into_inner(self) -> Vec<StoredMessage<O>> {
         self.inner
     }
 }
@@ -263,11 +259,6 @@ impl<P> ForwardedProtocolMessage<P> {
     }
 }
 
-impl<O> Debug for RequestMessage<O> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Session: {:?} Seq No: {:?}", self.session_id, self.sequence_number())
-    }
-}
 
 impl Orderable for ClientRqInfo {
     fn sequence_number(&self) -> SeqNo {
@@ -298,12 +289,12 @@ impl ClientRqInfo {
     }
 }
 
-impl<O> From<&StoredRequestMessage<O>> for ClientRqInfo {
-    fn from(message: &StoredRequestMessage<O>) -> Self {
+impl<O> From<&StoredMessage<O>> for ClientRqInfo where O: SessionBased {
+    fn from(message: &StoredMessage<O>) -> Self {
         let digest = message.header().unique_digest();
         let sender = message.header().from();
 
-        let session = message.message().session_id();
+        let session = message.message().session_number();
         let seq_no = message.message().sequence_number();
 
         Self {
@@ -324,5 +315,23 @@ impl Hash for ClientRqInfo {
 impl<P> Debug for Protocol<P> where P: Debug {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.payload)
+    }
+}
+
+impl SessionBased for ClientRqInfo {
+    fn session_number(&self) -> SeqNo {
+        self.session
+    }
+}
+
+impl<O> SessionBased for RequestMessage<O> {
+    fn session_number(&self) -> SeqNo {
+        self.session_id
+    }
+}
+
+impl<RP> SessionBased for ReplyMessage<RP> {
+    fn session_number(&self) -> SeqNo {
+        self.session_id
     }
 }
