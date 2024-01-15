@@ -14,7 +14,7 @@ use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureV
 
 /// The trait definining the necessary data types for the ordering protocol to be used
 /// with the decision log
-pub trait PersistentOrderProtocolTypes<RQ, OPM>: Send + Sync {
+pub trait PersistentOrderProtocolTypes<RQ, OPM>: Send + Sync + 'static {
     /// A proof of a given Sequence number in the consensus protocol
     /// This is used as the type to fully represent the validity of a given SeqNo in the protocol
     /// A proof with SeqNo X should mean that X has been decided correctly

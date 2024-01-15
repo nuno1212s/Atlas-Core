@@ -106,6 +106,7 @@ pub trait PermissionedOrderingProtocol: OrderProtocolTolerance {
 /// Containment of a batch of messages
 #[derive(Clone)]
 pub struct BatchedDecision<RQ> {
+    seq: SeqNo,
     inner: Vec<StoredMessage<RQ>>,
     meta: Option<BatchMeta>,
 }
@@ -321,6 +322,12 @@ impl<MD, P, O> Decision<MD, P, O> {
     }
 }
 
+impl<RQ> Orderable for BatchedDecision<RQ> {
+    fn sequence_number(&self) -> SeqNo {
+        self.seq
+    }
+}
+
 impl<MD, P, O> Orderable for Decision<MD, P, O> {
     fn sequence_number(&self) -> SeqNo {
         self.seq
@@ -499,6 +506,7 @@ impl<MD, D, P> Debug for DecisionInfo<MD, D, P> {
 impl<RQ> BatchedDecision<RQ> {
     pub fn new(seq: SeqNo, batch: Vec<StoredMessage<RQ>>, meta: Option<BatchMeta>) -> Self {
         BatchedDecision {
+            seq,
             inner: batch,
             meta,
         }
@@ -506,6 +514,7 @@ impl<RQ> BatchedDecision<RQ> {
 
     pub fn new_with_cap(seq: SeqNo, capacity: usize) -> Self {
         BatchedDecision {
+            seq,
             inner: Vec::with_capacity(capacity),
             meta: None,
         }
@@ -535,12 +544,13 @@ impl<RQ> BatchedDecision<RQ> {
         self.meta.take()
     }
 }
-
+/*
 impl<RQ> From<Vec<StoredMessage<RQ>>> for BatchedDecision<RQ> {
     fn from(value: Vec<StoredMessage<RQ>>) -> Self {
         BatchedDecision {
+            seq: (),
             inner: value,
             meta: None,
         }
     }
-}
+}*/

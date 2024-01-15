@@ -49,7 +49,7 @@ pub trait ViewTransferProtocolMessage: Send + Sync {
 
 /// We do not need a serde module since serde serialization is just done on the network level.
 /// The abstraction for ordering protocol messages.
-pub trait OrderingProtocolMessage<RQ>: Send + Sync {
+pub trait OrderingProtocolMessage<RQ>: Send + Sync + 'static {
 
     /// The general protocol type for all messages in the ordering protocol
     type ProtocolMessage: Orderable + SerType;
