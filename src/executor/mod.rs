@@ -1,4 +1,3 @@
-use std::time::Instant;
 use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::SeqNo;
@@ -20,6 +19,16 @@ pub struct Update<O> {
 pub struct UpdateReply<R> {
     info: UpdateInfo,
     reply: R
+}
+
+pub struct UpdateBatch<O> {
+    seq_no: SeqNo,
+    updates: Vec<Update<O>>,
+}
+
+pub struct ReplyBatch<R> {
+    seq_no: SeqNo,
+    replies: Vec<UpdateReply<R>>,
 }
 
 /// Trait that defines the necessary behaviour of a execution handle.

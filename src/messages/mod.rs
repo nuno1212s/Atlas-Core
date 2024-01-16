@@ -137,7 +137,7 @@ impl Debug for Message {
     }
 }
 
-
+/// The client request information about a given request
 #[derive(Eq, PartialEq, Ord, Clone, PartialOrd, Debug)]
 pub struct ClientRqInfo {
     //The UNIQUE digest of the request in question
@@ -148,7 +148,6 @@ pub struct ClientRqInfo {
     pub seq_no: SeqNo,
     pub session: SeqNo,
 }
-
 
 /// A wrapper for protocol messages
 #[cfg_attr(feature = "serialize_serde", derive(Serialize, Deserialize))]
