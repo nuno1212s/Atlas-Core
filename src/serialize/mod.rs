@@ -8,10 +8,9 @@ use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::Header;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
-use atlas_communication::serialize::Serializable;
+use atlas_communication::serialization::{InternalMessageVerifier, Serializable};
 
-use crate::ordering_protocol::networking::serialize::{NetworkView, OrderingProtocolMessage, OrderProtocolProof, ViewTransferProtocolMessage};
-use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
+use crate::ordering_protocol::networking::serialize::{NetworkView, OrderProtocolProof};
 
 #[cfg(feature = "serialize_capnp")]
 pub mod capnp;
@@ -62,45 +61,14 @@ impl NetworkView for NoView {
     }
 }
 
-impl<RQ> OrderingProtocolMessage<RQ> for NoProtocol {
-    type ProtocolMessage = ();
-
-    type ProofMetadata = ();
-
-    fn verify_order_protocol_message<NI, OPVH>(network_info: &Arc<NI>, header: &Header, message: Self::ProtocolMessage)
-                                               -> atlas_common::error::Result<Self::ProtocolMessage> where NI: NetworkInformationProvider,
-                                                                                                           OPVH: OrderProtocolSignatureVerificationHelper<RQ, Self, NI> {
-        Ok(message)
-    }
-
-    #[cfg(feature = "serialize_capnp")]
-    fn serialize_capnp(_: febft_capnp::consensus_messages_capnp::protocol_message::Builder, _: &Self::ProtocolMessage) -> Result<()> {
-        unimplemented!()
-    }
-
-    #[cfg(feature = "serialize_capnp")]
-    fn deserialize_capnp(_: febft_capnp::consensus_messages_capnp::protocol_message::Reader) -> Result<Self::ProtocolMessage> {
-        unimplemented!()
-    }
-
-    #[cfg(feature = "serialize_capnp")]
-    fn serialize_view_capnp(_: febft_capnp::cst_messages_capnp::view_info::Builder, msg: &Self::ViewInfo) -> Result<()> {
-        unimplemented!()
-    }
-
-    #[cfg(feature = "serialize_capnp")]
-    fn deserialize_view_capnp(_: febft_capnp::cst_messages_capnp::view_info::Reader) -> Result<Self::ViewInfo> {
-        unimplemented!()
-    }
+impl Serializable for NoProtocol {
+    type Message = ();
+    type Verifier = Self;
 }
 
-
-impl ViewTransferProtocolMessage for NoProtocol {
-    type ProtocolMessage = ();
-
-    fn verify_view_transfer_message<NI>(network_info: &Arc<NI>, header: &Header, message: Self::ProtocolMessage) -> atlas_common::error::Result<Self::ProtocolMessage>
-        where NI: NetworkInformationProvider, Self: Sized {
-        Ok(message)
+impl InternalMessageVerifier<()> for NoProtocol {
+    fn verify_message<NI>(info_provider: &Arc<NI>, header: &Header, message: &()) -> atlas_common::error::Result<()> where NI: NetworkInformationProvider {
+        Ok(())
     }
 }
 

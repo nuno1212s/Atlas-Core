@@ -4,7 +4,8 @@ use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
 use atlas_common::crypto::threshold_crypto::{PrivateKeyPart, PublicKeyPart, PublicKeySet};
 use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
-use atlas_communication::reconfiguration_node::{NetworkInformationProvider, ReconfigurationNode};
+use atlas_communication::reconfiguration_node::{NetworkInformationProvider};
+use atlas_communication::stub::RegularNetworkStub;
 
 use crate::serialize::ReconfigurationProtocolMessage;
 use crate::timeouts::{RqTimeout, Timeouts};
@@ -126,7 +127,8 @@ pub trait ReconfigurationProtocol: Send + Sync + 'static {
                                      node: Arc<NT>, timeouts: Timeouts,
                                      node_type: ReconfigurableNodeTypes,
                                      min_stable_node_count: usize) -> Result<Self>
-        where NT: ReconfigurationNode<Self::Serialization> + 'static, Self: Sized;
+        where NT: RegularNetworkStub<Self::Serialization> + 'static,
+              Self: Sized;
 
     /// Handle a timeout from the timeouts layer
     fn handle_timeout(&self, timeouts: Vec<RqTimeout>) -> Result<ReconfigResponse>;

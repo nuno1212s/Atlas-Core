@@ -5,8 +5,7 @@ use atlas_common::crypto::hash::Digest;
 use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
 use atlas_common::serialization_helper::SerType;
-use atlas_communication::{FullNetworkNode, NetworkNode};
-use atlas_communication::message::{SerializedMessage, StoredSerializedProtocolMessage};
+use atlas_communication::message::{SerializedMessage, StoredSerializedMessage};
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
 
 use crate::messages::ForwardedRequestsMessage;
@@ -58,7 +57,7 @@ pub trait OrderProtocolSendNode<RQ, OPM>: Send + Sync where RQ: SerType, OPM: Or
     /// Does not block on the message sent. Returns a result that is
     /// Ok if there is a current connection to the targets or err if not. No other checks are made
     /// on the success of the message dispatch
-    fn broadcast_serialized(&self, messages: BTreeMap<NodeId, StoredSerializedProtocolMessage<OPM::ProtocolMessage>>) -> std::result::Result<(), Vec<NodeId>>;
+    fn broadcast_serialized(&self, messages: BTreeMap<NodeId, StoredSerializedMessage<OPM::ProtocolMessage>>) -> std::result::Result<(), Vec<NodeId>>;
 }
 
 pub trait ViewTransferProtocolSendNode<VT>: Send + Sync where
@@ -103,6 +102,6 @@ pub trait ViewTransferProtocolSendNode<VT>: Send + Sync where
     /// Does not block on the message sent. Returns a result that is
     /// Ok if there is a current connection to the targets or err if not. No other checks are made
     /// on the success of the message dispatch
-    fn broadcast_serialized(&self, messages: BTreeMap<NodeId, StoredSerializedProtocolMessage<VT::ProtocolMessage>>) -> std::result::Result<(), Vec<NodeId>>;
+    fn broadcast_serialized(&self, messages: BTreeMap<NodeId, StoredSerializedMessage<VT::ProtocolMessage>>) -> std::result::Result<(), Vec<NodeId>>;
 }
 
