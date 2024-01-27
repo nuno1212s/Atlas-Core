@@ -35,14 +35,14 @@ pub trait PermissionedOrderingProtocolMessage: Send + Sync {
 
 /// The signature verification helper for the ordering protocol
 /// The ordering protocol always orders a RQ type, so we need something that will help us verify the signature
-pub trait OrderProtocolVerificationHelper<RQ, OP>: Send + Sync + 'static
+pub trait OrderProtocolVerificationHelper<RQ, OP, NI>: Send + Sync + 'static
     where OP: OrderingProtocolMessage<RQ> {
     /// This is a helper to verify internal client requests
-    fn verify_request_message<NI>(network_info: &Arc<NI>, header: &Header, request: RQ) -> Result<RQ>
+    fn verify_request_message(network_info: &Arc<NI>, header: &Header, request: RQ) -> Result<RQ>
         where NI: NetworkInformationProvider;
 
     /// helper mostly to verify forwarded consensus messages, for example
-    fn verify_protocol_message<NI>(network_info: &Arc<NI>, header: &Header, message: OP::ProtocolMessage) -> Result<OP::ProtocolMessage>
+    fn verify_protocol_message(network_info: &Arc<NI>, header: &Header, message: OP::ProtocolMessage) -> Result<OP::ProtocolMessage>
         where NI: NetworkInformationProvider;
 }
 
@@ -71,7 +71,7 @@ pub trait OrderingProtocolMessage<RQ>: Send + Sync + 'static {
     /// Verification helper for the ordering protocol
     fn internally_verify_message<NI, OPVH>(network_info: &Arc<NI>, header: &Header, message: &Self::ProtocolMessage) -> Result<()>
         where NI: NetworkInformationProvider,
-              OPVH: OrderProtocolVerificationHelper<RQ, Self>,
+              OPVH: OrderProtocolVerificationHelper<RQ, Self, NI>,
               Self: Sized;
 
     #[cfg(feature = "serialize_capnp")]

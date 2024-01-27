@@ -9,8 +9,7 @@ use atlas_communication::message::StoredMessage;
 use atlas_communication::reconfiguration_node::NetworkInformationProvider;
 
 use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol, ProtocolConsensusDecision, ProtocolMessage, ShareableConsensusMessage};
-use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, OrderProtocolProof};
-use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
+use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, OrderProtocolProof, OrderProtocolVerificationHelper};
 
 /// The trait definining the necessary data types for the ordering protocol to be used
 /// with the decision log
@@ -26,7 +25,7 @@ pub trait PersistentOrderProtocolTypes<RQ, OPM>: Send + Sync + 'static {
                               proof: Self::Proof) -> Result<Self::Proof>
         where NI: NetworkInformationProvider,
               OPM: OrderingProtocolMessage<RQ>,
-              OPVH: OrderProtocolSignatureVerificationHelper<RQ, OPM, NI>, Self: Sized;
+              OPVH: OrderProtocolVerificationHelper<RQ, OPM, NI>, Self: Sized;
 }
 
 /// A trait to create a separation between these helper methods and the rest
