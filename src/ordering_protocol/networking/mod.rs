@@ -6,7 +6,7 @@ use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
 use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::{SerializedMessage, StoredSerializedMessage};
-use atlas_communication::reconfiguration_node::NetworkInformationProvider;
+use atlas_communication::reconfiguration::NetworkInformationProvider;
 
 use crate::messages::ForwardedRequestsMessage;
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, ViewTransferProtocolMessage};

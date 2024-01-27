@@ -4,7 +4,7 @@ use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
 use atlas_common::crypto::threshold_crypto::{PrivateKeyPart, PublicKeyPart, PublicKeySet};
 use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
-use atlas_communication::reconfiguration_node::{NetworkInformationProvider};
+use atlas_communication::reconfiguration::{NetworkInformationProvider, ReconfigurationMessageHandler};
 use atlas_communication::stub::RegularNetworkStub;
 
 use crate::serialize::ReconfigurationProtocolMessage;
@@ -126,6 +126,7 @@ pub trait ReconfigurationProtocol: Send + Sync + 'static {
     async fn initialize_protocol<NT>(information: Arc<Self::InformationProvider>,
                                      node: Arc<NT>, timeouts: Timeouts,
                                      node_type: ReconfigurableNodeTypes,
+                                     reconfig: ReconfigurationMessageHandler,
                                      min_stable_node_count: usize) -> Result<Self>
         where NT: RegularNetworkStub<Self::Serialization> + 'static,
               Self: Sized;
@@ -147,8 +148,7 @@ pub trait ReconfigurationProtocol: Send + Sync + 'static {
 }
 
 /// Threshold crypto information about the current network
-pub trait QuorumThresholdCrypto : Send + Sync {
-
+pub trait QuorumThresholdCrypto: Send + Sync {
     /// Get our own public key part
     fn own_pub_key(&self) -> Result<PublicKeyPart>;
 
@@ -163,5 +163,4 @@ pub trait QuorumThresholdCrypto : Send + Sync {
     /// then be combined in order to assure at least threshold
     /// nodes signed/encrypted the same piece of information
     fn get_priv_key_part(&self) -> Result<&PrivateKeyPart>;
-
 }

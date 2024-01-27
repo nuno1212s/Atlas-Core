@@ -6,7 +6,7 @@ use ::serde::Serialize;
 use atlas_common::error::*;
 use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::StoredMessage;
-use atlas_communication::reconfiguration_node::NetworkInformationProvider;
+use atlas_communication::reconfiguration::NetworkInformationProvider;
 
 use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol, ProtocolConsensusDecision, ProtocolMessage, ShareableConsensusMessage};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, OrderProtocolProof, OrderProtocolVerificationHelper};

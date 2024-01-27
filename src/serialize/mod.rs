@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::Header;
-use atlas_communication::reconfiguration_node::NetworkInformationProvider;
+use atlas_communication::reconfiguration::NetworkInformationProvider;
 use atlas_communication::serialization::{InternalMessageVerifier, Serializable};
 
 use crate::ordering_protocol::networking::serialize::{NetworkView, OrderProtocolProof};
