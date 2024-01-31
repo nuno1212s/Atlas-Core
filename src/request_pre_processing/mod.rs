@@ -1,5 +1,6 @@
 use std::ops::Deref;
 use std::time::{Duration, Instant};
+use std::vec::IntoIter;
 use atlas_common::channel;
 use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx, OneShotTx, RecvError, TryRecvError};
 use atlas_common::node_id::NodeId;
@@ -11,6 +12,7 @@ use crate::metric::{RQ_PP_CLONE_PENDING_TIME_ID, RQ_PP_COLLECT_PENDING_TIME_ID, 
 use crate::timeouts::RqTimeout;
 
 pub mod work_dividers;
+pub mod network;
 
 /// The work partitioner is responsible for deciding which worker should process a given request
 /// This should sign a contract to maintain all client sessions in the same worker, never changing
@@ -45,12 +47,34 @@ pub enum PreProcessorMessage<O> {
     CloneRequests(Vec<ClientRqInfo>, OneShotTx<Vec<StoredMessage<O>>>),
 }
 
-/// Output messages of the preprocessor
-pub enum PreProcessorOutputMessage<O> {
-    /// A de duped batch of ordered requests that should be proposed
-    DeDupedOrderedRequests(Vec<StoredMessage<O>>),
-    /// A de duped batch of unordered requests that should be proposed
-    DeDupedUnorderedRequests(Vec<StoredMessage<O>>),
+/// The request output message
+pub struct PreProcessorOutputMessage<O> {
+    deduped_requests: Vec<StoredMessage<O>>,
+}
+
+impl<O> From<Vec<StoredMessage<O>>> for PreProcessorOutputMessage<O> {
+    fn from(value: Vec<StoredMessage<O>>) -> Self {
+        Self {
+            deduped_requests: value,
+        }
+    }
+}
+
+impl<O> Deref for PreProcessorOutputMessage<O> {
+    type Target = Vec<StoredMessage<O>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.deduped_requests
+    }
+}
+
+impl<O> IntoIterator for PreProcessorOutputMessage<O> {
+    type Item = StoredMessage<O>;
+    type IntoIter = IntoIter<StoredMessage<O>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.deduped_requests.into_iter()
+    }
 }
 
 /// Request pre processor handle
@@ -58,7 +82,6 @@ pub enum PreProcessorOutputMessage<O> {
 pub struct RequestPreProcessor<O>(ChannelSyncTx<PreProcessorMessage<O>>);
 
 impl<O> RequestPreProcessor<O> {
-
     pub fn clone_pending_rqs(&self, client_rqs: Vec<ClientRqInfo>) -> Vec<StoredMessage<O>> {
         let start = Instant::now();
 
@@ -135,21 +158,6 @@ impl<O> BatchOutput<O> {
         metric_duration(RQ_PP_WORKER_PROPOSER_PASSING_TIME_ID, instant.elapsed());
 
         Ok(message)
-    }
-}
-
-impl<O> Deref for PreProcessorOutputMessage<O> {
-    type Target = Vec<StoredMessage<O>>;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            PreProcessorOutputMessage::DeDupedOrderedRequests(cls) => {
-                cls
-            }
-            PreProcessorOutputMessage::DeDupedUnorderedRequests(cls) => {
-                cls
-            }
-        }
     }
 }
 

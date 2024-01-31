@@ -13,3 +13,4 @@ pub mod persistent_log;
 pub mod reconfiguration_protocol;
 pub mod executor;
 pub mod request_pre_processing;
+mod configurable;

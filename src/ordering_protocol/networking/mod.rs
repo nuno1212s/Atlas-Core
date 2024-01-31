@@ -10,9 +10,17 @@ use atlas_communication::reconfiguration::NetworkInformationProvider;
 
 use crate::messages::ForwardedRequestsMessage;
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, ViewTransferProtocolMessage};
+use crate::ordering_protocol::{OrderingProtocol, OrderingProtocolArgs};
 
 pub mod signature_ver;
 pub mod serialize;
+
+/// The networking order protocol
+pub trait NetworkedOrderProtocolInitializer<RQ, NT>: OrderingProtocol<RQ> where RQ: SerType {
+
+    fn initialize(config: Self::Config, ordering_protocol_args: OrderingProtocolArgs<RQ, NT>) -> Result<Self> where Self: Sized;
+
+}
 
 pub trait OrderProtocolSendNode<RQ, OPM>: Send + Sync where RQ: SerType, OPM: OrderingProtocolMessage<RQ> {
     type NetworkInfoProvider: NetworkInformationProvider + 'static;
@@ -62,7 +70,6 @@ pub trait OrderProtocolSendNode<RQ, OPM>: Send + Sync where RQ: SerType, OPM: Or
 
 pub trait ViewTransferProtocolSendNode<VT>: Send + Sync where
     VT: ViewTransferProtocolMessage {
-
     type NetworkInfoProvider: NetworkInformationProvider + 'static;
 
     fn id(&self) -> NodeId;

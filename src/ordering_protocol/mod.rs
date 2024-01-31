@@ -11,10 +11,12 @@ use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::maybe_vec::ordered::{MaybeOrderedVec, MaybeOrderedVecBuilder};
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
+use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::StoredMessage;
 use atlas_metrics::benchmarks::BatchMeta;
 
 use crate::messages::{ClientRqInfo, RequestMessage};
+use crate::ordering_protocol::networking::OrderProtocolSendNode;
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
 use crate::persistent_log::OrderingProtocolLog;
 use crate::request_pre_processing::{BatchOutput, RequestPreProcessor};
@@ -54,7 +56,11 @@ pub trait OrderProtocolTolerance {
 ///
 /// An ordering protocol is meant to order various requests (of type RQ) received
 /// into a globally accepted order in a fault tolerant scenario, which is can then be used by FT applications
-pub trait OrderingProtocol<RQ, NT>: OrderProtocolTolerance + Orderable {
+///
+/// The generic type presented here is the type of the request that the ordering protocol will be ordering
+/// This can be whatever the developer wants, as long as it implements the [atlas_common::serialization_helper::SerType] trait
+pub trait OrderingProtocol<RQ>: OrderProtocolTolerance + Orderable
+    where RQ: SerType {
     /// The type which implements OrderingProtocolMessage, to be implemented by the developer
     type Serialization: OrderingProtocolMessage<RQ> + 'static;
 
@@ -62,8 +68,9 @@ pub trait OrderingProtocol<RQ, NT>: OrderProtocolTolerance + Orderable {
     type Config;
 
     /// Initialize this ordering protocol with the given configuration, executor, timeouts and node
-    fn initialize(config: Self::Config, args: OrderingProtocolArgs<RQ, NT>) -> Result<Self> where
-        Self: Sized;
+    /*fn initialize<NT>(config: Self::Config, args: OrderingProtocolArgs<RQ, NT>) -> Result<Self>
+        where Self: Sized,
+              NT: OrderProtocolSendNode<RQ, Self::Serialization>;*/
 
     /// Handle a protocol message that was received while we are executing another protocol
     fn handle_off_ctx_message(&mut self, message: ShareableConsensusMessage<RQ, Self::Serialization>);

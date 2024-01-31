@@ -11,6 +11,16 @@ use atlas_communication::reconfiguration::NetworkInformationProvider;
 use crate::ordering_protocol::{DecisionMetadata, OrderingProtocol, ProtocolConsensusDecision, ProtocolMessage, ShareableConsensusMessage};
 use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, OrderProtocolProof, OrderProtocolVerificationHelper};
 
+
+/// The trait to define the necessary methods and data types for this order protocol
+/// to be compatible with the decision log
+pub trait LoggableOrderProtocol<RQ>: OrderingProtocol<RQ>
++ OrderProtocolPersistenceHelper<RQ, Self::Serialization, Self::PersistableTypes>
+    where RQ: SerType, {
+    /// The required data types for working with the decision log
+    type PersistableTypes: PersistentOrderProtocolTypes<RQ, Self::Serialization> + 'static;
+}
+
 /// The trait definining the necessary data types for the ordering protocol to be used
 /// with the decision log
 pub trait PersistentOrderProtocolTypes<RQ, OPM>: Send + Sync + 'static {
@@ -62,12 +72,3 @@ pub trait OrderProtocolPersistenceHelper<RQ, OPM, POP>: Send
 }
 
 pub type PProof<RQ, OP, POP> = <POP as PersistentOrderProtocolTypes<RQ, OP>>::Proof;
-
-/// The trait to define the necessary methods and data types for this order protocol
-/// to be compatible with the decision log
-pub trait LoggableOrderProtocol<RQ, NT>: OrderingProtocol<RQ, NT>
-+ OrderProtocolPersistenceHelper<RQ, Self::Serialization, Self::PersistableTypes>
-    where RQ: SerType, {
-    /// The required data types for working with the decision log
-    type PersistableTypes: PersistentOrderProtocolTypes<RQ, Self::Serialization> + 'static;
-}
