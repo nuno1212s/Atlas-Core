@@ -7,10 +7,8 @@ use log::{debug, info};
 
 use atlas_common::channel;
 use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx, TryRecvError};
-use atlas_common::crypto::hash::Digest;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::SeqNo;
-use atlas_smr_application::serialize::ApplicationData;
 
 use crate::messages::{ClientRqInfo, Message};
 use crate::request_pre_processing::operation_key_raw;

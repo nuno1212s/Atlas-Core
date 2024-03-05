@@ -1,14 +1,13 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug};
 use std::sync::Arc;
 #[cfg(feature = "serialize_serde")]
 use serde::{Deserialize, Serialize};
 use atlas_common::node_id::NodeId;
 use atlas_common::error::*;
-use atlas_common::ordering::{Orderable, SeqNo};
+use atlas_common::ordering::{Orderable};
+use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::Header;
-use atlas_communication::reconfiguration_node::NetworkInformationProvider;
-use atlas_smr_application::serialize::ApplicationData;
-use crate::ordering_protocol::networking::signature_ver::OrderProtocolSignatureVerificationHelper;
+use atlas_communication::reconfiguration::NetworkInformationProvider;
 
 /// The basic methods needed for a view
 pub trait NetworkView: Orderable + Send + Clone + Debug {
@@ -23,11 +22,6 @@ pub trait NetworkView: Orderable + Send + Clone + Debug {
     fn n(&self) -> usize;
 }
 
-pub trait OrderProtocolLog: Orderable {
-    // At the moment I only need orderable, but I might need more in the future
-    fn first_seq(&self) -> Option<SeqNo>;
-}
-
 /// Proof of the order protocol message
 pub trait OrderProtocolProof: Orderable {
     // At the moment I only need orderable, but I might need more in the future
@@ -36,52 +30,49 @@ pub trait OrderProtocolProof: Orderable {
 }
 
 pub trait PermissionedOrderingProtocolMessage: Send + Sync {
-    #[cfg(feature = "serialize_capnp")]
-    type ViewInfo: NetworkView + Send + Clone;
-
-    #[cfg(feature = "serialize_serde")]
-    type ViewInfo: NetworkView + for<'a> Deserialize<'a> + Serialize + Send + Clone + Debug;
+    type ViewInfo: NetworkView + SerType;
 }
 
+/// The signature verification helper for the ordering protocol
+/// The ordering protocol always orders a RQ type, so we need something that will help us verify the signature
+pub trait OrderProtocolVerificationHelper<RQ, OP, NI>: Send + Sync + 'static
+    where OP: OrderingProtocolMessage<RQ> {
+    /// This is a helper to verify internal client requests
+    fn verify_request_message(network_info: &Arc<NI>, header: &Header, request: RQ) -> Result<RQ>
+        where NI: NetworkInformationProvider;
+
+    /// helper mostly to verify forwarded consensus messages, for example
+    fn verify_protocol_message(network_info: &Arc<NI>, header: &Header, message: OP::ProtocolMessage) -> Result<OP::ProtocolMessage>
+        where NI: NetworkInformationProvider;
+}
+
+/// The protocol message trait, involving the necessary types for
+/// the view transfer protocol messages
 pub trait ViewTransferProtocolMessage: Send + Sync {
     /// The general protocol type for all messages in the View Transfer protocol
-    #[cfg(feature = "serialize_capnp")]
-    type ProtocolMessage: Orderable + Send + Clone;
+    type ProtocolMessage: SerType;
 
-    #[cfg(feature = "serialize_serde")]
-    type ProtocolMessage: for<'a> Deserialize<'a> + Serialize + Send + Clone + Debug;
-
-    fn verify_view_transfer_message<NI>(network_info: &Arc<NI>,
-                                        header: &Header,
-                                        message: Self::ProtocolMessage) -> Result<Self::ProtocolMessage>
-        where NI: NetworkInformationProvider, Self: Sized;
+    /// Verification helper for the ordering protocol
+    fn internally_verify_message<NI>(network_info: &Arc<NI>, header: &Header, message: &Self::ProtocolMessage) -> Result<()>
+        where NI: NetworkInformationProvider;
 }
 
 /// We do not need a serde module since serde serialization is just done on the network level.
 /// The abstraction for ordering protocol messages.
-pub trait OrderingProtocolMessage<D>: Send + Sync {
+pub trait OrderingProtocolMessage<RQ>: Send + Sync + 'static {
     /// The general protocol type for all messages in the ordering protocol
-    #[cfg(feature = "serialize_capnp")]
-    type ProtocolMessage: Orderable + Send + Clone;
-
-    #[cfg(feature = "serialize_serde")]
-    type ProtocolMessage: Orderable + for<'a> Deserialize<'a> + Serialize + Send + Clone + Debug;
+    type ProtocolMessage: Orderable + SerType;
 
     /// The metadata type for storing the proof in the persistent storage
     /// Since the message will be stored in the persistent storage, it needs to be serializable
     /// This should provide all the necessary final information to assemble the proof from the messages
-    #[cfg(feature = "serialize_capnp")]
-    type ProofMetadata: Orderable + Send + Clone;
+    type ProofMetadata: Orderable + SerType;
 
-    #[cfg(feature = "serialize_serde")]
-    type ProofMetadata: Orderable + for<'a> Deserialize<'a> + Serialize + Send + Clone;
-
-    fn verify_order_protocol_message<NI, OPVH>(network_info: &Arc<NI>,
-                                               header: &Header,
-                                               message: Self::ProtocolMessage) -> Result<Self::ProtocolMessage>
+    /// Verification helper for the ordering protocol
+    fn internally_verify_message<NI, OPVH>(network_info: &Arc<NI>, header: &Header, message: &Self::ProtocolMessage) -> Result<()>
         where NI: NetworkInformationProvider,
-              OPVH: OrderProtocolSignatureVerificationHelper<D, Self, NI>,
-              D: ApplicationData, Self: Sized;
+              OPVH: OrderProtocolVerificationHelper<RQ, Self, NI>,
+              Self: Sized;
 
     #[cfg(feature = "serialize_capnp")]
     fn serialize_capnp(builder: febft_capnp::consensus_messages_capnp::protocol_message::Builder, msg: &Self::ProtocolMessage) -> Result<()>;

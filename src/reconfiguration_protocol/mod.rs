@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
 use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
+use atlas_common::crypto::threshold_crypto::{PrivateKeyPart, PublicKeyPart, PublicKeySet};
 use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
-use atlas_communication::reconfiguration_node::{NetworkInformationProvider, ReconfigurationNode};
+use atlas_communication::reconfiguration::{NetworkInformationProvider, ReconfigurationMessageHandler};
+use atlas_communication::stub::RegularNetworkStub;
 
 use crate::serialize::ReconfigurationProtocolMessage;
 use crate::timeouts::{RqTimeout, Timeouts};
@@ -13,8 +15,8 @@ use crate::timeouts::{RqTimeout, Timeouts};
 /// Quorum View.
 #[derive(Debug)]
 pub enum QuorumReconfigurationMessage {
-    /// The reconfiguration protocol has reached stability and we can now start to execute the
-    /// And we know the current members of the quorum. This will be used to run state transfer protocols
+    /// The reconfiguration protocol has reached stability and we can now start to execute the other
+    /// as we know the current members of the quorum. This will be used to run state transfer protocols
     /// Quorum protocol, with the given base nodes
     ReconfigurationProtocolStable(Vec<NodeId>),
 
@@ -124,8 +126,10 @@ pub trait ReconfigurationProtocol: Send + Sync + 'static {
     async fn initialize_protocol<NT>(information: Arc<Self::InformationProvider>,
                                      node: Arc<NT>, timeouts: Timeouts,
                                      node_type: ReconfigurableNodeTypes,
+                                     reconfig: ReconfigurationMessageHandler,
                                      min_stable_node_count: usize) -> Result<Self>
-        where NT: ReconfigurationNode<Self::Serialization> + 'static, Self: Sized;
+        where NT: RegularNetworkStub<Self::Serialization> + 'static,
+              Self: Sized;
 
     /// Handle a timeout from the timeouts layer
     fn handle_timeout(&self, timeouts: Vec<RqTimeout>) -> Result<ReconfigResponse>;
@@ -141,4 +145,22 @@ pub trait ReconfigurationProtocol: Send + Sync + 'static {
 
     /// Check if a given join certificate is valid
     fn is_join_certificate_valid(&self, certificate: &QuorumJoinCert<Self::Serialization>) -> bool;
+}
+
+/// Threshold crypto information about the current network
+pub trait QuorumThresholdCrypto: Send + Sync {
+    /// Get our own public key part
+    fn own_pub_key(&self) -> Result<PublicKeyPart>;
+
+    /// Get the public key part that corresponds to a given node
+    fn pub_key_for_node(&self, node: NodeId) -> Result<PublicKeyPart>;
+
+    /// The set of public key, generated collaboratively by the quorum
+    fn pub_key_set(&self) -> Result<&PublicKeySet>;
+
+    /// Get our own private key part, which we will
+    /// use to sign / encrypt information which will
+    /// then be combined in order to assure at least threshold
+    /// nodes signed/encrypted the same piece of information
+    fn get_priv_key_part(&self) -> Result<&PrivateKeyPart>;
 }
