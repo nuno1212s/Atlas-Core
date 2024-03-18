@@ -8,6 +8,7 @@ use atlas_communication::reconfiguration::{
     NetworkInformationProvider, ReconfigurationMessageHandler,
 };
 use atlas_communication::stub::RegularNetworkStub;
+use crate::serialize;
 
 use crate::serialize::ReconfigurationProtocolMessage;
 use crate::timeouts::{RqTimeout, Timeouts};

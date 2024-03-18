@@ -26,7 +26,7 @@ pub type TimedOut = Vec<RqTimeout>;
 
 type TimeoutWorkerId = u32;
 
-#[derive(Eq, Ord, PartialOrd, Hash, Clone, Debug)]
+#[derive(Eq, Ord, PartialOrd, Clone, Debug)]
 pub enum TimeoutKind {
     ///Relates to the timeout of a client request.
     /// Stores the client who sent it, along with the request

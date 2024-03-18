@@ -17,6 +17,8 @@ readme = "README.md"
 serialize_serde = ["serde", "atlas-common/serialize_serde", "atlas-communication/serialize_serde"]
 serialize_capnp = ["atlas-capnp", "atlas-common/serialize_capnp"]
 
+default = ["serialize_serde"]
+
 [dependencies]
 anyhow = "1.0"
 thiserror = "1.0"
