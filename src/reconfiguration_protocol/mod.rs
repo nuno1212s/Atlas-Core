@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::serialize;
 use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
 use atlas_common::crypto::threshold_crypto::{PrivateKeyPart, PublicKeyPart, PublicKeySet};
 use atlas_common::error::*;
@@ -8,7 +9,6 @@ use atlas_communication::reconfiguration::{
     NetworkInformationProvider, ReconfigurationMessageHandler,
 };
 use atlas_communication::stub::RegularNetworkStub;
-use crate::serialize;
 
 use crate::serialize::ReconfigurationProtocolMessage;
 use crate::timeouts::{RqTimeout, Timeouts};
