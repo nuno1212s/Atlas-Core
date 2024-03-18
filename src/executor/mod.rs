@@ -2,6 +2,7 @@ use crate::ordering_protocol::BatchedDecision;
 use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::SeqNo;
+use atlas_communication::message::StoredMessage;
 
 pub enum UpdateInfo {
     SessionBased {
@@ -48,6 +49,6 @@ pub trait DecisionExecutorHandle<RQ>: Send + Clone + 'static {
     /// Queues a batch of unordered requests for execution
     fn queue_update_unordered(
         &self,
-        requests: BatchedDecision<RQ>,
+        requests: Vec<StoredMessage<RQ>>,
     ) -> atlas_common::error::Result<()>;
 }

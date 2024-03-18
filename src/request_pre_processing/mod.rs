@@ -86,6 +86,12 @@ impl<O> IntoIterator for PreProcessorOutputMessage<O> {
     }
 }
 
+impl<O> Into<Vec<StoredMessage<O>>> for PreProcessorOutputMessage<O> {
+    fn into(self) -> Vec<StoredMessage<O>> {
+        self.deduped_requests
+    }
+}
+
 /// Request pre processor handle
 #[derive(Clone)]
 pub struct RequestPreProcessor<O>(ChannelSyncTx<PreProcessorMessage<O>>);
@@ -151,6 +157,14 @@ impl<O> Deref for RequestPreProcessor<O> {
 impl<O> From<ChannelSyncRx<PreProcessorOutput<O>>> for BatchOutput<O> {
     fn from(value: ChannelSyncRx<PreProcessorOutput<O>>) -> Self {
         Self(value)
+    }
+}
+
+impl<O> Deref for BatchOutput<O> {
+    type Target = ChannelSyncRx<PreProcessorOutput<O>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
