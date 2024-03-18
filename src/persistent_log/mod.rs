@@ -1,15 +1,16 @@
-use std::sync::Arc;
+use crate::ordering_protocol::loggable::{PProof, PersistentOrderProtocolTypes};
+use crate::ordering_protocol::networking::serialize::{
+    OrderingProtocolMessage, PermissionedOrderingProtocolMessage,
+};
+use crate::ordering_protocol::{DecisionMetadata, ShareableConsensusMessage, View};
 #[cfg(feature = "serialize_serde")]
 use ::serde::{Deserialize, Serialize};
 use atlas_common::error::*;
 use atlas_common::globals::ReadOnly;
-use atlas_common::ordering::{SeqNo};
+use atlas_common::ordering::SeqNo;
 use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::StoredMessage;
-use crate::ordering_protocol::{DecisionMetadata, ShareableConsensusMessage, View};
-use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
-use crate::ordering_protocol::loggable::{PersistentOrderProtocolTypes, PProof};
-
+use std::sync::Arc;
 
 /// How should the data be written and response delivered?
 /// If Sync is chosen the function will block on the call and return the result of the operation
@@ -26,16 +27,28 @@ pub enum OperationMode {
 pub trait PersistableStateTransferProtocol {}
 
 /// The trait necessary for a persistent log protocol to be used as the persistent log layer
-pub trait OrderingProtocolLog<RQ, OP>: Clone where RQ: SerType, OP: OrderingProtocolMessage<RQ> {
+pub trait OrderingProtocolLog<RQ, OP>: Clone
+where
+    RQ: SerType,
+    OP: OrderingProtocolMessage<RQ>,
+{
     /// Write to the persistent log the latest committed sequence number
     fn write_committed_seq_no(&self, write_mode: OperationMode, seq: SeqNo) -> Result<()>;
 
     /// Write a given message to the persistent log
-    fn write_message(&self, write_mode: OperationMode, msg: ShareableConsensusMessage<RQ, OP>) -> Result<()>;
+    fn write_message(
+        &self,
+        write_mode: OperationMode,
+        msg: ShareableConsensusMessage<RQ, OP>,
+    ) -> Result<()>;
 
     /// Write the metadata for a given proof to the persistent log
     /// This in combination with the messages for that sequence number should form a valid proof
-    fn write_decision_metadata(&self, write_mode: OperationMode, metadata: DecisionMetadata<RQ, OP>) -> Result<()>;
+    fn write_decision_metadata(
+        &self,
+        write_mode: OperationMode,
+        metadata: DecisionMetadata<RQ, OP>,
+    ) -> Result<()>;
 
     /// Invalidate all messages with sequence number equal to the given one
     fn write_invalidate(&self, write_mode: OperationMode, seq: SeqNo) -> Result<()>;
@@ -43,11 +56,13 @@ pub trait OrderingProtocolLog<RQ, OP>: Clone where RQ: SerType, OP: OrderingProt
 
 /// The trait necessary for a permission logging protocol capable of simple
 /// storage operations related to permissioned protocol messages
-pub trait PermissionedOrderingProtocolLog<POP> where POP: PermissionedOrderingProtocolMessage {
+pub trait PermissionedOrderingProtocolLog<POP>
+where
+    POP: PermissionedOrderingProtocolMessage,
+{
     /// Write a view info into the persistent log
     fn write_view_info(&self, write_mode: OperationMode, view: View<POP>) -> Result<()>;
 
     /// Read a view info from the persistent log
     fn read_view_info(&self) -> Result<Option<View<POP>>>;
 }
-

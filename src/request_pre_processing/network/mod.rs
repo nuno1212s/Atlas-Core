@@ -1,6 +1,6 @@
-use std::time::Duration;
-use atlas_communication::message::StoredMessage;
 use atlas_common::error::*;
+use atlas_communication::message::StoredMessage;
+use std::time::Duration;
 
 /// The abstraction for the network layer of the request pre-processing module.
 pub trait RequestPreProcessingHandle<D>: Send + Sync {

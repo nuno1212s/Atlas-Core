@@ -1,24 +1,30 @@
-use std::ops::Deref;
-use std::time::{Duration, Instant};
-use std::vec::IntoIter;
+use crate::messages::{ClientRqInfo, ForwardedRequestsMessage, SessionBased};
+use crate::metric::{
+    RQ_PP_CLONE_PENDING_TIME_ID, RQ_PP_COLLECT_PENDING_TIME_ID,
+    RQ_PP_WORKER_PROPOSER_PASSING_TIME_ID,
+};
+use crate::timeouts::RqTimeout;
 use atlas_common::channel;
 use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx, OneShotTx, RecvError, TryRecvError};
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::SeqNo;
 use atlas_communication::message::{Header, StoredMessage};
 use atlas_metrics::metrics::metric_duration;
-use crate::messages::{ClientRqInfo, ForwardedRequestsMessage, SessionBased};
-use crate::metric::{RQ_PP_CLONE_PENDING_TIME_ID, RQ_PP_COLLECT_PENDING_TIME_ID, RQ_PP_WORKER_PROPOSER_PASSING_TIME_ID};
-use crate::timeouts::RqTimeout;
+use std::ops::Deref;
+use std::time::{Duration, Instant};
+use std::vec::IntoIter;
 
-pub mod work_dividers;
 pub mod network;
+pub mod work_dividers;
 
 /// The work partitioner is responsible for deciding which worker should process a given request
 /// This should sign a contract to maintain all client sessions in the same worker, never changing
 /// A session is defined by the client ID and the session ID.
 ///
-pub trait WorkPartitioner<O>: Send where O: SessionBased {
+pub trait WorkPartitioner<O>: Send
+where
+    O: SessionBased,
+{
     /// Get the worker that should process this request
     fn get_worker_for(rq_info: &Header, message: &O, worker_count: usize) -> usize;
 
@@ -38,7 +44,10 @@ pub enum PreProcessorMessage<O> {
     /// We have received requests that are already decided by the system
     StoppedRequests(Vec<StoredMessage<O>>),
     /// Analyse timeout requests. Returns only timeouts that have not yet been executed
-    TimeoutsReceived(Vec<RqTimeout>, ChannelSyncTx<(Vec<RqTimeout>, Vec<RqTimeout>)>),
+    TimeoutsReceived(
+        Vec<RqTimeout>,
+        ChannelSyncTx<(Vec<RqTimeout>, Vec<RqTimeout>)>,
+    ),
     /// A batch of requests that has been decided by the system
     DecidedBatch(Vec<ClientRqInfo>),
     /// Collect all pending messages from all workers.
@@ -87,7 +96,9 @@ impl<O> RequestPreProcessor<O> {
 
         let (tx, rx) = channel::new_oneshot_channel();
 
-        self.0.send_return(PreProcessorMessage::CloneRequests(client_rqs, tx)).unwrap();
+        self.0
+            .send_return(PreProcessorMessage::CloneRequests(client_rqs, tx))
+            .unwrap();
 
         let result = rx.recv().unwrap();
 
@@ -101,7 +112,9 @@ impl<O> RequestPreProcessor<O> {
 
         let (tx, rx) = channel::new_oneshot_channel();
 
-        self.0.send_return(PreProcessorMessage::CollectAllPendingMessages(tx)).unwrap();
+        self.0
+            .send_return(PreProcessorMessage::CollectAllPendingMessages(tx))
+            .unwrap();
 
         let result = rx.recv().unwrap();
 
@@ -110,8 +123,14 @@ impl<O> RequestPreProcessor<O> {
         result
     }
 
-    pub fn process_timeouts(&self, timeouts: Vec<RqTimeout>, response: ChannelSyncTx<(Vec<RqTimeout>, Vec<RqTimeout>)>) {
-        self.0.send_return(PreProcessorMessage::TimeoutsReceived(timeouts, response)).unwrap();
+    pub fn process_timeouts(
+        &self,
+        timeouts: Vec<RqTimeout>,
+        response: ChannelSyncTx<(Vec<RqTimeout>, Vec<RqTimeout>)>,
+    ) {
+        self.0
+            .send_return(PreProcessorMessage::TimeoutsReceived(timeouts, response))
+            .unwrap();
     }
 }
 
@@ -152,7 +171,10 @@ impl<O> BatchOutput<O> {
         Ok(message)
     }
 
-    pub fn recv_timeout(&self, timeout: Duration) -> Result<PreProcessorOutputMessage<O>, TryRecvError> {
+    pub fn recv_timeout(
+        &self,
+        timeout: Duration,
+    ) -> Result<PreProcessorOutputMessage<O>, TryRecvError> {
         let (message, instant) = self.0.recv_timeout(timeout)?;
 
         metric_duration(RQ_PP_WORKER_PROPOSER_PASSING_TIME_ID, instant.elapsed());
@@ -163,7 +185,9 @@ impl<O> BatchOutput<O> {
 
 #[inline]
 pub fn operation_key<O>(header: &Header, message: &O) -> u64
-    where O: SessionBased {
+where
+    O: SessionBased,
+{
     operation_key_raw(header.from(), message.session_number())
 }
 
@@ -176,4 +200,3 @@ pub fn operation_key_raw(from: NodeId, session: SeqNo) -> u64 {
     // therefore this is safe, and will not delete any bits
     client_id | (session_id << 32)
 }
-

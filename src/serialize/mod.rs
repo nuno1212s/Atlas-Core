@@ -24,7 +24,6 @@ pub trait ReconfigurationProtocolMessage: Serializable + Send + Sync {
     type QuorumJoinCertificate: for<'a> Deserialize<'a> + Serialize + Send + Clone;
 }
 
-
 #[cfg_attr(feature = "serialize_serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct NoProtocol;
@@ -67,7 +66,14 @@ impl Serializable for NoProtocol {
 }
 
 impl InternalMessageVerifier<()> for NoProtocol {
-    fn verify_message<NI>(info_provider: &Arc<NI>, header: &Header, message: &()) -> atlas_common::error::Result<()> where NI: NetworkInformationProvider {
+    fn verify_message<NI>(
+        info_provider: &Arc<NI>,
+        header: &Header,
+        message: &(),
+    ) -> atlas_common::error::Result<()>
+    where
+        NI: NetworkInformationProvider,
+    {
         Ok(())
     }
 }

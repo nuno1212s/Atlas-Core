@@ -14,7 +14,6 @@ use crate::timeouts::TimedOut;
 
 pub type StoredRequestMessage<O> = StoredMessage<RequestMessage<O>>;
 
-
 /// A trait that indicates that the requests in question are separated into sessions
 pub trait SessionBased: Orderable {
     /// Obtain the session number of the object
@@ -63,7 +62,11 @@ impl<O> Orderable for RequestMessage<O> {
 impl<O> RequestMessage<O> {
     /// Creates a new `RequestMessage`.
     pub fn new(sess: SeqNo, id: SeqNo, operation: O) -> Self {
-        Self { operation, operation_id: id, session_id: sess }
+        Self {
+            operation,
+            operation_id: id,
+            session_id: sess,
+        }
     }
 
     /// Returns a reference to the operation of type `O`.
@@ -83,7 +86,12 @@ impl<O> RequestMessage<O> {
 
 impl<O> Debug for RequestMessage<O> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Session: {:?} Seq No: {:?}", self.session_id, self.sequence_number())
+        write!(
+            f,
+            "Session: {:?} Seq No: {:?}",
+            self.session_id,
+            self.sequence_number()
+        )
     }
 }
 
@@ -96,7 +104,11 @@ impl<P> Orderable for ReplyMessage<P> {
 impl<P> ReplyMessage<P> {
     /// Creates a new `ReplyMessage`.
     pub fn new(sess: SeqNo, id: SeqNo, payload: P) -> Self {
-        Self { payload, operation_id: id, session_id: sess }
+        Self {
+            payload,
+            operation_id: id,
+            session_id: sess,
+        }
     }
 
     /// Returns a reference to the payload of type `P`.
@@ -161,7 +173,9 @@ impl<P> Protocol<P> {
         Self { payload }
     }
 
-    pub fn payload(&self) -> &P { &self.payload }
+    pub fn payload(&self) -> &P {
+        &self.payload
+    }
 
     pub fn into_inner(self) -> P {
         self.payload
@@ -190,7 +204,9 @@ impl<VT> VTMessage<VT> {
         Self { payload }
     }
 
-    pub fn payload(&self) -> &VT { &self.payload }
+    pub fn payload(&self) -> &VT {
+        &self.payload
+    }
 
     pub fn into_inner(self) -> VT {
         self.payload
@@ -204,7 +220,6 @@ impl<VT> Deref for VTMessage<VT> {
         &self.payload
     }
 }
-
 
 ///
 /// A message containing a number of forwarded requests
@@ -221,9 +236,13 @@ impl<O> ForwardedRequestsMessage<O> {
         Self { inner }
     }
 
-    pub fn requests(&self) -> &Vec<StoredMessage<O>> { &self.inner }
+    pub fn requests(&self) -> &Vec<StoredMessage<O>> {
+        &self.inner
+    }
 
-    pub fn mut_requests(&mut self) -> &mut Vec<StoredMessage<O>> { &mut self.inner }
+    pub fn mut_requests(&mut self) -> &mut Vec<StoredMessage<O>> {
+        &mut self.inner
+    }
 
     /// Returns the client requests contained in this `ForwardedRequestsMessage`.
     pub fn into_inner(self) -> Vec<StoredMessage<O>> {
@@ -234,7 +253,7 @@ impl<O> ForwardedRequestsMessage<O> {
 /// A message containing a single forwarded consensus message
 #[cfg_attr(feature = "serialize_serde", derive(Serialize, Deserialize))]
 #[derive(Clone)]
-pub struct ForwardedProtocolMessage<P> where {
+pub struct ForwardedProtocolMessage<P> {
     message: StoredMessage<Protocol<P>>,
 }
 
@@ -251,13 +270,14 @@ impl<P> ForwardedProtocolMessage<P> {
         Self { message }
     }
 
-    pub fn message(&self) -> &StoredMessage<Protocol<P>> { &self.message }
+    pub fn message(&self) -> &StoredMessage<Protocol<P>> {
+        &self.message
+    }
 
     pub fn into_inner(self) -> StoredMessage<Protocol<P>> {
         self.message
     }
 }
-
 
 impl Orderable for ClientRqInfo {
     fn sequence_number(&self) -> SeqNo {
@@ -288,7 +308,10 @@ impl ClientRqInfo {
     }
 }
 
-impl<O> From<&StoredMessage<O>> for ClientRqInfo where O: SessionBased {
+impl<O> From<&StoredMessage<O>> for ClientRqInfo
+where
+    O: SessionBased,
+{
     fn from(message: &StoredMessage<O>) -> Self {
         let digest = message.header().unique_digest();
         let sender = message.header().from();
@@ -311,7 +334,10 @@ impl Hash for ClientRqInfo {
     }
 }
 
-impl<P> Debug for Protocol<P> where P: Debug {
+impl<P> Debug for Protocol<P>
+where
+    P: Debug,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.payload)
     }

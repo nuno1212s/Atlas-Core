@@ -4,7 +4,9 @@ use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
 use atlas_common::crypto::threshold_crypto::{PrivateKeyPart, PublicKeyPart, PublicKeySet};
 use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
-use atlas_communication::reconfiguration::{NetworkInformationProvider, ReconfigurationMessageHandler};
+use atlas_communication::reconfiguration::{
+    NetworkInformationProvider, ReconfigurationMessageHandler,
+};
 use atlas_communication::stub::RegularNetworkStub;
 
 use crate::serialize::ReconfigurationProtocolMessage;
@@ -79,8 +81,10 @@ pub enum QuorumUpdateMessage {
 /// to contact in order to perform operations
 pub enum ReconfigurableNodeTypes {
     ClientNode(ChannelSyncTx<QuorumUpdateMessage>),
-    QuorumNode(ChannelSyncTx<QuorumReconfigurationMessage>,
-               ChannelSyncRx<QuorumReconfigurationResponse>),
+    QuorumNode(
+        ChannelSyncTx<QuorumReconfigurationMessage>,
+        ChannelSyncRx<QuorumReconfigurationResponse>,
+    ),
 }
 
 pub type QuorumJoinCert<RP: ReconfigurationProtocolMessage> = RP::QuorumJoinCertificate;
@@ -123,13 +127,17 @@ pub trait ReconfigurationProtocol: Send + Sync + 'static {
     /// the ordering, state transfer and log transfer protocols, the reconfiguration protocol
     /// is meant to run completely independently from the rest of the system, only sending and receiving
     /// updates
-    async fn initialize_protocol<NT>(information: Arc<Self::InformationProvider>,
-                                     node: Arc<NT>, timeouts: Timeouts,
-                                     node_type: ReconfigurableNodeTypes,
-                                     reconfig: ReconfigurationMessageHandler,
-                                     min_stable_node_count: usize) -> Result<Self>
-        where NT: RegularNetworkStub<Self::Serialization> + 'static,
-              Self: Sized;
+    async fn initialize_protocol<NT>(
+        information: Arc<Self::InformationProvider>,
+        node: Arc<NT>,
+        timeouts: Timeouts,
+        node_type: ReconfigurableNodeTypes,
+        reconfig: ReconfigurationMessageHandler,
+        min_stable_node_count: usize,
+    ) -> Result<Self>
+    where
+        NT: RegularNetworkStub<Self::Serialization> + 'static,
+        Self: Sized;
 
     /// Handle a timeout from the timeouts layer
     fn handle_timeout(&self, timeouts: Vec<RqTimeout>) -> Result<ReconfigResponse>;

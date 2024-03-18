@@ -3,14 +3,14 @@
 #![feature(extract_if)]
 #![feature(btree_extract_if)]
 
-pub mod serialize;
-pub mod messages;
-pub mod ordering_protocol;
-pub mod timeouts;
+mod configurable;
+pub mod executor;
 pub mod followers;
+pub mod messages;
 pub mod metric;
+pub mod ordering_protocol;
 pub mod persistent_log;
 pub mod reconfiguration_protocol;
-pub mod executor;
 pub mod request_pre_processing;
-mod configurable;
+pub mod serialize;
+pub mod timeouts;

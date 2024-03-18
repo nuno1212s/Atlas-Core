@@ -1,7 +1,7 @@
-use atlas_common::error::*;
-use atlas_common::node_id::NodeId;
 use crate::ordering_protocol;
 use crate::serialize::ReconfigurationProtocolMessage;
+use atlas_common::error::*;
+use atlas_common::node_id::NodeId;
 
 /// Result of attempting to change the quorum view
 /// This should be returned immediately. In the case the quorum change
@@ -21,15 +21,19 @@ pub enum ReconfigurationAttemptResult {
 /// Definitions:
 /// - An ordering protocol can only accept one reconfiguration request at a given time (and should only support
 /// one reconfiguration request at a time), Any other request during reconfiguration should return [ReconfigurationAttemptResult::CurrentlyReconfiguring]
-/// or if there was another error, just return [ReconfigurationAttemptResult::Failed]. 
+/// or if there was another error, just return [ReconfigurationAttemptResult::Failed].
 ///
-pub trait ReconfigurableOrderProtocol<RP> where RP: ReconfigurationProtocolMessage {
-
+pub trait ReconfigurableOrderProtocol<RP>
+where
+    RP: ReconfigurationProtocolMessage,
+{
     /// Attempt to integrate a given node into the current view of the quorum.
     /// This function is only used when we are
-    fn attempt_quorum_node_join(&mut self, joining_node: NodeId) -> Result<ReconfigurationAttemptResult>;
+    fn attempt_quorum_node_join(
+        &mut self,
+        joining_node: NodeId,
+    ) -> Result<ReconfigurationAttemptResult>;
 
     /// We are, ourselves, attempting to join the quorum.
     fn joining_quorum(&mut self) -> Result<ReconfigurationAttemptResult>;
-
 }

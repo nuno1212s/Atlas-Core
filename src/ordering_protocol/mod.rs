@@ -1,14 +1,14 @@
+use anyhow::anyhow;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
-use anyhow::anyhow;
 
 use atlas_common::crypto::hash::Digest;
 use atlas_common::error::*;
 use atlas_common::globals::ReadOnly;
-use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::maybe_vec::ordered::{MaybeOrderedVec, MaybeOrderedVecBuilder};
+use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_common::serialization_helper::SerType;
@@ -16,28 +16,36 @@ use atlas_communication::message::StoredMessage;
 use atlas_metrics::benchmarks::BatchMeta;
 
 use crate::messages::{ClientRqInfo, RequestMessage};
+use crate::ordering_protocol::networking::serialize::{
+    OrderingProtocolMessage, PermissionedOrderingProtocolMessage,
+};
 use crate::ordering_protocol::networking::OrderProtocolSendNode;
-use crate::ordering_protocol::networking::serialize::{OrderingProtocolMessage, PermissionedOrderingProtocolMessage};
 use crate::persistent_log::OrderingProtocolLog;
 use crate::request_pre_processing::{BatchOutput, RequestPreProcessor};
 use crate::timeouts::{RqTimeout, Timeouts};
 
-pub mod reconfigurable_order_protocol;
 pub mod loggable;
 pub mod networking;
 pub mod permissioned;
+pub mod reconfigurable_order_protocol;
 
-pub type View<POP: PermissionedOrderingProtocolMessage> = <POP as PermissionedOrderingProtocolMessage>::ViewInfo;
-pub type ShareableConsensusMessage<RQ, OP> = Arc<ReadOnly<StoredMessage<<OP as OrderingProtocolMessage<RQ>>::ProtocolMessage>>>;
+pub type View<POP: PermissionedOrderingProtocolMessage> =
+    <POP as PermissionedOrderingProtocolMessage>::ViewInfo;
+pub type ShareableConsensusMessage<RQ, OP> =
+    Arc<ReadOnly<StoredMessage<<OP as OrderingProtocolMessage<RQ>>::ProtocolMessage>>>;
 pub type ShareableMessage<P> = Arc<ReadOnly<StoredMessage<P>>>;
 
 pub type ProtocolMessage<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProtocolMessage;
 pub type DecisionMetadata<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProofMetadata;
 
-pub struct OrderingProtocolArgs<R, NT>(pub NodeId, pub Timeouts,
-                                       pub RequestPreProcessor<R>,
-                                       pub BatchOutput<R>, pub Arc<NT>,
-                                       pub Vec<NodeId>);
+pub struct OrderingProtocolArgs<R, NT>(
+    pub NodeId,
+    pub Timeouts,
+    pub RequestPreProcessor<R>,
+    pub BatchOutput<R>,
+    pub Arc<NT>,
+    pub Vec<NodeId>,
+);
 
 /// A trait that specifies how many nodes are necessary
 /// in order to tolerate f failures
@@ -60,7 +68,9 @@ pub trait OrderProtocolTolerance {
 /// The generic type presented here is the type of the request that the ordering protocol will be ordering
 /// This can be whatever the developer wants, as long as it implements the [atlas_common::serialization_helper::SerType] trait
 pub trait OrderingProtocol<RQ>: OrderProtocolTolerance + Orderable
-    where RQ: SerType {
+where
+    RQ: SerType,
+{
     /// The type which implements OrderingProtocolMessage, to be implemented by the developer
     type Serialization: OrderingProtocolMessage<RQ> + 'static;
 
@@ -69,11 +79,14 @@ pub trait OrderingProtocol<RQ>: OrderProtocolTolerance + Orderable
 
     /// Initialize this ordering protocol with the given configuration, executor, timeouts and node
     /*fn initialize<NT>(config: Self::Config, args: OrderingProtocolArgs<RQ, NT>) -> Result<Self>
-        where Self: Sized,
-              NT: OrderProtocolSendNode<RQ, Self::Serialization>;*/
+    where Self: Sized,
+          NT: OrderProtocolSendNode<RQ, Self::Serialization>;*/
 
     /// Handle a protocol message that was received while we are executing another protocol
-    fn handle_off_ctx_message(&mut self, message: ShareableConsensusMessage<RQ, Self::Serialization>);
+    fn handle_off_ctx_message(
+        &mut self,
+        message: ShareableConsensusMessage<RQ, Self::Serialization>,
+    );
 
     /// Handle the protocol being executed having changed (for example to the state transfer protocol)
     /// This is important for some of the protocols, which need to know when they are being executed or not
@@ -82,21 +95,44 @@ pub trait OrderingProtocol<RQ>: OrderProtocolTolerance + Orderable
     /// Poll from the ordering protocol in order to know what we should do next
     /// We do this to check if there are already messages waiting to be executed that were received ahead of time and stored.
     /// Or whether we should run state transfer or wait for messages from other replicas
-    fn poll(&mut self) -> Result<OPPollResult<DecisionMetadata<RQ, Self::Serialization>, ProtocolMessage<RQ, Self::Serialization>, RQ>>;
+    fn poll(
+        &mut self,
+    ) -> Result<
+        OPPollResult<
+            DecisionMetadata<RQ, Self::Serialization>,
+            ProtocolMessage<RQ, Self::Serialization>,
+            RQ,
+        >,
+    >;
 
     /// Process a protocol message that we have received
     /// This can be a message received from the poll() method or a message received from other replicas.
-    fn process_message(&mut self, message: ShareableConsensusMessage<RQ, Self::Serialization>)
-                       -> Result<OPExecResult<DecisionMetadata<RQ, Self::Serialization>, ProtocolMessage<RQ, Self::Serialization>, RQ>>;
+    fn process_message(
+        &mut self,
+        message: ShareableConsensusMessage<RQ, Self::Serialization>,
+    ) -> Result<
+        OPExecResult<
+            DecisionMetadata<RQ, Self::Serialization>,
+            ProtocolMessage<RQ, Self::Serialization>,
+            RQ,
+        >,
+    >;
 
     /// Install a given sequence number
     fn install_seq_no(&mut self, seq_no: SeqNo) -> Result<()>;
 
     /// Handle a timeout received from the timeouts layer
-    fn handle_timeout(&mut self, timeout: Vec<RqTimeout>)
-                      -> Result<OPExecResult<DecisionMetadata<RQ, Self::Serialization>, ProtocolMessage<RQ, Self::Serialization>, RQ>>;
+    fn handle_timeout(
+        &mut self,
+        timeout: Vec<RqTimeout>,
+    ) -> Result<
+        OPExecResult<
+            DecisionMetadata<RQ, Self::Serialization>,
+            ProtocolMessage<RQ, Self::Serialization>,
+            RQ,
+        >,
+    >;
 }
-
 
 /// A permissioned ordering protocol, meaning only a select few are actually part of the quorum that decides the
 /// ordering of the operations.
@@ -162,7 +198,11 @@ pub enum OPPollResult<MD, P, O> {
     /// The ordered protocol progressed a decision as a result of the poll operation
     ProgressedDecision(DecisionsAhead, MaybeVec<Decision<MD, P, O>>),
     /// The quorum was joined as a result of the poll operation
-    QuorumJoined(DecisionsAhead, Option<MaybeVec<Decision<MD, P, O>>>, JoinInfo),
+    QuorumJoined(
+        DecisionsAhead,
+        Option<MaybeVec<Decision<MD, P, O>>>,
+        JoinInfo,
+    ),
     /// The order protocol wants to be polled again, for some particular reason
     RePoll,
 }
@@ -188,7 +228,11 @@ pub enum OPExecResult<MD, P, O> {
     ProgressedDecision(DecisionsAhead, MaybeVec<Decision<MD, P, O>>),
     /// The quorum has been joined by a given node.
     /// Do we want this to also clear the upcoming decisions?
-    QuorumJoined(DecisionsAhead, Option<MaybeVec<Decision<MD, P, O>>>, JoinInfo),
+    QuorumJoined(
+        DecisionsAhead,
+        Option<MaybeVec<Decision<MD, P, O>>>,
+        JoinInfo,
+    ),
     /// The order protocol requires the protocol to update its state to be inline with
     /// the rest of replicas in the system
     RunCst,
@@ -229,7 +273,9 @@ impl<MD, P, O> Decision<MD, P, O> {
     pub fn decision_info_from_message(seq: SeqNo, decision: ShareableMessage<P>) -> Self {
         Decision {
             seq,
-            decision_info: MaybeOrderedVec::One(DecisionInfo::PartialDecisionInformation(MaybeVec::One(decision))),
+            decision_info: MaybeOrderedVec::One(DecisionInfo::PartialDecisionInformation(
+                MaybeVec::One(decision),
+            )),
         }
     }
 
@@ -245,12 +291,18 @@ impl<MD, P, O> Decision<MD, P, O> {
     pub fn decision_info_from_messages(seq: SeqNo, messages: Vec<ShareableMessage<P>>) -> Self {
         Decision {
             seq,
-            decision_info: MaybeOrderedVec::One(DecisionInfo::PartialDecisionInformation(MaybeVec::Mult(messages))),
+            decision_info: MaybeOrderedVec::One(DecisionInfo::PartialDecisionInformation(
+                MaybeVec::Mult(messages),
+            )),
         }
     }
 
     /// Create a decision info from metadata and messages
-    pub fn decision_info_from_metadata_and_messages(seq: SeqNo, metadata: MD, messages: MaybeVec<ShareableMessage<P>>) -> Self {
+    pub fn decision_info_from_metadata_and_messages(
+        seq: SeqNo,
+        metadata: MD,
+        messages: MaybeVec<ShareableMessage<P>>,
+    ) -> Self {
         let mut decision_info = BTreeSet::new();
 
         decision_info.insert(DecisionInfo::DecisionMetadata(metadata));
@@ -271,13 +323,18 @@ impl<MD, P, O> Decision<MD, P, O> {
     }
 
     /// Create a full decision info, from all of the components
-    pub fn full_decision_info(seq: SeqNo, metadata: MD,
-                              messages: Vec<ShareableMessage<P>>,
-                              requests: ProtocolConsensusDecision<O>) -> Self {
+    pub fn full_decision_info(
+        seq: SeqNo,
+        metadata: MD,
+        messages: Vec<ShareableMessage<P>>,
+        requests: ProtocolConsensusDecision<O>,
+    ) -> Self {
         let mut decision_info = BTreeSet::new();
 
         decision_info.insert(DecisionInfo::DecisionMetadata(metadata));
-        decision_info.insert(DecisionInfo::PartialDecisionInformation(MaybeVec::Mult(messages)));
+        decision_info.insert(DecisionInfo::PartialDecisionInformation(MaybeVec::Mult(
+            messages,
+        )));
         decision_info.insert(DecisionInfo::DecisionDone(requests));
 
         Decision {
@@ -290,7 +347,9 @@ impl<MD, P, O> Decision<MD, P, O> {
     /// Returns an error when the sequence number of the decisions does not match
     pub fn merge_decisions(&mut self, other: Self) -> Result<()> {
         if self.seq != other.seq {
-            return Err(anyhow!("The decisions have different sequence numbers, cannot merge"));
+            return Err(anyhow!(
+                "The decisions have different sequence numbers, cannot merge"
+            ));
         }
 
         let mut ordered_vec_builder = MaybeOrderedVecBuilder::from_existing(other.decision_info);
@@ -352,7 +411,10 @@ impl<MD, P, O> DecisionInfo<MD, P, O> {
         MaybeVec::from_one(Self::PartialDecisionInformation(message))
     }
 
-    pub fn decision_info_from_message_and_metadata(message: MaybeVec<ShareableMessage<P>>, metadata: MD) -> MaybeVec<Self> {
+    pub fn decision_info_from_message_and_metadata(
+        message: MaybeVec<ShareableMessage<P>>,
+        metadata: MD,
+    ) -> MaybeVec<Self> {
         let partial = Self::PartialDecisionInformation(message);
         let metadata = Self::DecisionMetadata(metadata);
 
@@ -373,7 +435,10 @@ impl JoinInfo {
     }
 }
 
-impl<MD, P, D> Debug for OPPollResult<MD, P, D> where P: Debug {
+impl<MD, P, D> Debug for OPPollResult<MD, P, D>
+where
+    P: Debug,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             OPPollResult::RunCst => {
@@ -392,13 +457,13 @@ impl<MD, P, D> Debug for OPPollResult<MD, P, D> where P: Debug {
                 write!(f, "{} committed decisions", rqs.len())
             }
             OPPollResult::QuorumJoined(clear_ahead, decs, node) => {
-                let len = if let Some(vec) = decs {
-                    vec.len()
-                } else {
-                    0
-                };
+                let len = if let Some(vec) = decs { vec.len() } else { 0 };
 
-                write!(f, "Join information: {:?}. Contained Decisions {}, Clear Ahead {:?}", node, len, clear_ahead)
+                write!(
+                    f,
+                    "Join information: {:?}. Contained Decisions {}, Clear Ahead {:?}",
+                    node, len, clear_ahead
+                )
             }
         }
     }
@@ -409,7 +474,10 @@ impl<MD, P, O> PartialEq<Self> for DecisionInfo<MD, P, O> {
         match (self, other) {
             (DecisionInfo::DecisionMetadata(md), DecisionInfo::DecisionMetadata(md2)) => true,
             (DecisionInfo::DecisionDone(prot), DecisionInfo::DecisionDone(prot2)) => true,
-            (DecisionInfo::PartialDecisionInformation(info), DecisionInfo::PartialDecisionInformation(info2)) => {
+            (
+                DecisionInfo::PartialDecisionInformation(info),
+                DecisionInfo::PartialDecisionInformation(info2),
+            ) => {
                 if info.len() != info2.len() {
                     false
                 } else {
@@ -422,7 +490,7 @@ impl<MD, P, O> PartialEq<Self> for DecisionInfo<MD, P, O> {
                     true
                 }
             }
-            (_, _) => false
+            (_, _) => false,
         }
     }
 }
@@ -431,10 +499,14 @@ impl<MD, P, O> PartialOrd for DecisionInfo<MD, P, O> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (DecisionInfo::DecisionDone(_), _) => Some(Ordering::Greater),
-            (DecisionInfo::DecisionMetadata(_), DecisionInfo::DecisionDone(_)) => Some(Ordering::Less),
-            (DecisionInfo::DecisionMetadata(_), DecisionInfo::DecisionMetadata(_)) => Some(Ordering::Equal),
+            (DecisionInfo::DecisionMetadata(_), DecisionInfo::DecisionDone(_)) => {
+                Some(Ordering::Less)
+            }
+            (DecisionInfo::DecisionMetadata(_), DecisionInfo::DecisionMetadata(_)) => {
+                Some(Ordering::Equal)
+            }
             (DecisionInfo::DecisionMetadata(_), _) => Some(Ordering::Greater),
-            (DecisionInfo::PartialDecisionInformation(_), _) => Some(Ordering::Less)
+            (DecisionInfo::PartialDecisionInformation(_), _) => Some(Ordering::Less),
         }
     }
 }
@@ -449,10 +521,12 @@ impl<MD, P, O> Ord for DecisionInfo<MD, P, O> {
 
 /// Constructor for the ProtocolConsensusDecision struct
 impl<O> ProtocolConsensusDecision<O> {
-    pub fn new(seq: SeqNo,
-               executable_batch: BatchedDecision<O>,
-               client_rqs: Vec<ClientRqInfo>,
-               batch_digest: Digest) -> Self {
+    pub fn new(
+        seq: SeqNo,
+        executable_batch: BatchedDecision<O>,
+        client_rqs: Vec<ClientRqInfo>,
+        batch_digest: Digest,
+    ) -> Self {
         ProtocolConsensusDecision {
             seq,
             batch_digest,
@@ -462,7 +536,12 @@ impl<O> ProtocolConsensusDecision<O> {
     }
 
     pub fn into(self) -> (SeqNo, BatchedDecision<O>, Vec<ClientRqInfo>, Digest) {
-        (self.seq, self.executable_batch, self.contained_requests, self.batch_digest)
+        (
+            self.seq,
+            self.executable_batch,
+            self.contained_requests,
+            self.batch_digest,
+        )
     }
 
     pub fn update_batch(&self) -> &BatchedDecision<O> {
@@ -473,12 +552,8 @@ impl<O> ProtocolConsensusDecision<O> {
 /// Unwrap a shareable message, avoiding cloning at all costs
 pub fn unwrap_shareable_message<T: Clone>(message: ShareableMessage<T>) -> StoredMessage<T> {
     match Arc::try_unwrap(message) {
-        Ok(msg) => {
-            msg.into_inner()
-        }
-        Err(pointer) => {
-            (**pointer).clone()
-        }
+        Ok(msg) => msg.into_inner(),
+        Err(pointer) => (**pointer).clone(),
     }
 }
 
@@ -490,7 +565,13 @@ impl<O> Orderable for ProtocolConsensusDecision<O> {
 
 impl<O> Debug for ProtocolConsensusDecision<O> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ProtocolConsensusDecision {{ seq: {:?}, executable_batch: {:?}, batch_info: {:?} }}", self.seq, self.executable_batch.len(), self.batch_digest)
+        write!(
+            f,
+            "ProtocolConsensusDecision {{ seq: {:?}, executable_batch: {:?}, batch_info: {:?} }}",
+            self.seq,
+            self.executable_batch.len(),
+            self.batch_digest
+        )
     }
 }
 
