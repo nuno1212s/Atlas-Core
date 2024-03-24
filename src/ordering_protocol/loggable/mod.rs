@@ -43,6 +43,11 @@ pub trait PersistentOrderProtocolTypes<RQ, OPM>: Send + Sync + 'static {
         Self: Sized;
 }
 
+pub type DecomposedProof<'a, RQ, OPM> = (
+    &'a DecisionMetadata<RQ, OPM>,
+    Vec<&'a StoredMessage<ProtocolMessage<RQ, OPM>>>,
+);
+
 /// A trait to create a separation between these helper methods and the rest
 /// of the order protocol so that we don't require generics that are not needed
 pub trait OrderProtocolPersistenceHelper<RQ, OPM, POP>: Send
@@ -74,10 +79,7 @@ where
     /// Decompose a given proof into it's metadata and messages, ready to be persisted
     fn decompose_proof(
         proof: &PProof<RQ, OPM, POP>,
-    ) -> (
-        &DecisionMetadata<RQ, OPM>,
-        Vec<&StoredMessage<ProtocolMessage<RQ, OPM>>>,
-    );
+    ) -> DecomposedProof<RQ, OPM>;
 
     /// Extract the proof out of the protocol decision proof
     fn get_requests_in_proof(proof: &PProof<RQ, OPM, POP>)

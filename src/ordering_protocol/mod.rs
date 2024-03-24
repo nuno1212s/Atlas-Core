@@ -1,4 +1,4 @@
-#![allow(clippy::non_canonical_partial_ord_impl, clippy::large_enum_variant)]
+#![allow(clippy::non_canonical_partial_ord_impl, clippy::large_enum_variant, type_alias_bounds)]
 
 use std::cmp::Ordering;
 use std::collections::BTreeSet;

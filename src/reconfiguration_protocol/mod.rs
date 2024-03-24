@@ -1,3 +1,5 @@
+#![allow(type_alias_bounds)]
+
 use std::sync::Arc;
 
 use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
@@ -94,6 +96,7 @@ pub enum ReconfigResponse {
     Stop,
 }
 
+#[allow(async_fn_in_trait)]
 /// The trait defining the necessary functionality for a reconfiguration protocol (at least at the moment)
 ///
 /// This is different from the other protocols like ordering, state and log transfer since we actually
@@ -135,9 +138,9 @@ pub trait ReconfigurationProtocol: Send + Sync + 'static {
         reconfig: ReconfigurationMessageHandler,
         min_stable_node_count: usize,
     ) -> Result<Self>
-    where
-        NT: RegularNetworkStub<Self::Serialization> + 'static,
-        Self: Sized;
+        where
+            NT: RegularNetworkStub<Self::Serialization> + 'static,
+            Self: Sized;
 
     /// Handle a timeout from the timeouts layer
     fn handle_timeout(&self, timeouts: Vec<RqTimeout>) -> Result<ReconfigResponse>;
