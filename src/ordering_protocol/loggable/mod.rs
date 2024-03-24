@@ -1,8 +1,5 @@
 use std::sync::Arc;
 
-#[cfg(feature = "serialize_serde")]
-use ::serde::Serialize;
-
 use atlas_common::error::*;
 use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::StoredMessage;

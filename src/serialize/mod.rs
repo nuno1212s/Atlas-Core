@@ -64,9 +64,9 @@ impl Serializable for NoProtocol {
 
 impl InternalMessageVerifier<()> for NoProtocol {
     fn verify_message<NI>(
-        info_provider: &Arc<NI>,
-        header: &Header,
-        message: &(),
+        _info_provider: &Arc<NI>,
+        _header: &Header,
+        _message: &(),
     ) -> atlas_common::error::Result<()>
     where
         NI: NetworkInformationProvider,

@@ -1,7 +1,10 @@
+#![allow(dead_code)]
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
+use either::Either;
 use intmap::{Entry, IntMap};
 use log::{debug, info};
 
@@ -61,7 +64,7 @@ pub(super) struct TimeoutWorker {
 }
 
 impl TimeoutWorker {
-    pub(super) fn new(
+    pub(super) fn start_worker(
         worker_id: TimeoutWorkerId,
         node_id: NodeId,
         default_timeout: Duration,
@@ -92,7 +95,7 @@ impl TimeoutWorker {
 
     fn run(mut self) {
         loop {
-            let mut message = match self.work_rx.recv_timeout(ITERATION_DELAY) {
+            let message = match self.work_rx.recv_timeout(ITERATION_DELAY) {
                 Ok(message) => Some(message),
                 Err(TryRecvError::Timeout) => None,
                 Err(err) => {
@@ -176,16 +179,13 @@ impl TimeoutWorker {
                 })
                 .collect();
 
-            for (phase, mut timeout) in timeout_per_phase {
+            for (phase, timeout) in timeout_per_phase {
                 let timeout = timeout
                     .into_iter()
                     .filter(|kind| {
                         //Only reset the client request timeouts
 
-                        match kind {
-                            TimeoutKind::ClientRequestTimeout(_) => true,
-                            _ => false,
-                        }
+                        matches!(kind, TimeoutKind::ClientRequestTimeout(_))
                     })
                     .collect();
 
@@ -202,26 +202,26 @@ impl TimeoutWorker {
                 );
             }
 
-            if let Err(_) = self
+            if let Err(err) = self
                 .loopback_channel
                 .send_return(Message::Timeout(to_time_out))
             {
-                info!("Loopback channel has disconnected, disconnecting timeouts thread");
+                info!(
+                    "Loopback channel has disconnected, disconnecting timeouts thread {:?}",
+                    err
+                );
             }
         }
     }
 
     /// Get the timeout information for a given request
     fn get_rq_timeout_info(&mut self, timeout_kind: &TimeoutKind) -> TimeoutPhase {
-        match timeout_kind {
-            TimeoutKind::ClientRequestTimeout(client_rq) => {
-                let operation_key = operation_key_raw(client_rq.sender, client_rq.session);
+        if let TimeoutKind::ClientRequestTimeout(client_rq) = timeout_kind {
+            let operation_key = operation_key_raw(client_rq.sender, client_rq.session);
 
-                if let Some(info) = self.client_watched_requests.remove(operation_key) {
-                    return info.timeout_phase;
-                }
+            if let Some(info) = self.client_watched_requests.remove(operation_key) {
+                return info.timeout_phase;
             }
-            _ => {}
         }
 
         TimeoutPhase::TimedOut(0, Instant::now())
@@ -235,7 +235,7 @@ impl TimeoutWorker {
         let RqTimeoutMessage {
             timeout,
             notifications_needed,
-            mut timeout_info,
+            timeout_info,
         } = message;
 
         let current_timestamp = Utc::now().timestamp_millis() as u64;
@@ -253,7 +253,7 @@ impl TimeoutWorker {
                 continue 'outer;
             }
 
-            let mut timeout_rq = TimeoutRequest {
+            let timeout_rq = TimeoutRequest {
                 time_made: current_timestamp,
                 timeout,
                 notifications_needed,
@@ -280,7 +280,7 @@ impl TimeoutWorker {
 
                 match self.client_watched_requests.entry(operation_key) {
                     Entry::Occupied(occupied) => {
-                        let mut info = occupied.into_mut();
+                        let info = occupied.into_mut();
 
                         // If the current request we have stored is older than the one we are now receiving,
                         // This means we are outdated and need to catch up to the consensus
@@ -322,38 +322,40 @@ impl TimeoutWorker {
             self.remove_timeout_from_pending(&info);
         }
 
-        return registered;
+        registered
     }
 
     fn handle_messages_received(&mut self, message: ReceivedRequest) {
-        let mut cleared_requests = 0;
-
         match message {
-            ReceivedRequest::PrePrepareRequestReceived(sender, pre_prepare) => {
+            ReceivedRequest::PrePrepareRequestReceived(_sender, pre_prepare) => {
                 for client_request in pre_prepare {
                     let operation_key =
                         operation_key_raw(client_request.sender, client_request.session);
 
                     let should_remove_timeout =
                         if let Some(info) = self.client_watched_requests.get_mut(operation_key) {
-                            if info.seq_no > client_request.seq_no {
-                                // We have already seen a newer request, ignore this one
-                                None
-                            } else if info.seq_no == client_request.seq_no {
-                                // We want to remove the timeout associated with this request
+                            match info.seq_no.index(client_request.seq_no) {
+                                Either::Left(_) => {
+                                    // The client req seq no is smaller than the info seq no
 
-                                cleared_requests += 1;
+                                    // We have a new request, we need to update the timeout
+                                    // But since this is a seen request, we don't want to add a timeout to it
 
-                                Some(info.clone())
-                            } else {
-                                // We have a new request, we need to update the timeout
-                                // But since this is a seen request, we don't want to add a timeout to it
+                                    let to_return = info.clone();
 
-                                let to_return = info.clone();
+                                    info.update_from_decided(client_request);
 
-                                info.update_from_decided(client_request);
+                                    Some(to_return)
+                                }
+                                Either::Right(0) => {
+                                    // We want to remove the timeout associated with this request
 
-                                Some(to_return)
+                                    Some(info.clone())
+                                }
+                                Either::Right(_) => {
+                                    // We have already seen a newer request, ignore this one
+                                    None
+                                }
                             }
                         } else {
                             None
@@ -365,11 +367,11 @@ impl TimeoutWorker {
                 }
             }
             ReceivedRequest::Cst(sender, message) => {
-                self.pending_timeouts.retain(|timeout, timeout_rqs| {
+                self.pending_timeouts.retain(|_timeout, timeout_rqs| {
                     let to_remove = timeout_rqs.iter_mut().position(|timeout_rq| {
                         if let TimeoutKind::Cst(seq_no) = &timeout_rq.info {
                             if *seq_no == message {
-                                return timeout_rq.register_received_from(sender.clone());
+                                return timeout_rq.register_received_from(sender);
                             }
                         }
 
@@ -382,11 +384,11 @@ impl TimeoutWorker {
                 });
             }
             ReceivedRequest::LT(sender, message) => {
-                self.pending_timeouts.retain(|timeout, timeout_rqs| {
+                self.pending_timeouts.retain(|_timeout, timeout_rqs| {
                     let to_remove = timeout_rqs.iter_mut().position(|timeout_rq| {
                         if let TimeoutKind::LogTransfer(seq_no) = &timeout_rq.info {
                             if *seq_no == message {
-                                return timeout_rq.register_received_from(sender.clone());
+                                return timeout_rq.register_received_from(sender);
                             }
                         }
 
@@ -400,11 +402,11 @@ impl TimeoutWorker {
                 });
             }
             ReceivedRequest::Reconfiguration(sender, message) => {
-                self.pending_timeouts.retain(|timeout, timeout_rqs| {
+                self.pending_timeouts.retain(|_timeout, timeout_rqs| {
                     let to_remove = timeout_rqs.iter_mut().position(|timeout_rq| {
                         if let TimeoutKind::Reconfiguration(cst_rq) = &timeout_rq.info {
                             if *cst_rq == message {
-                                return timeout_rq.register_received_from(sender.clone());
+                                return timeout_rq.register_received_from(sender);
                             }
                         }
 
@@ -425,40 +427,37 @@ impl TimeoutWorker {
         let timeouts = self.pending_timeouts.get_mut(&client_rq.timeout_time);
 
         if let Some(timeouts) = timeouts {
-            timeouts
-                .iter()
-                .position(|timeout| {
-                    if let TimeoutKind::ClientRequestTimeout(rq) = &timeout.info {
-                        let client_request = &client_rq.timeout_info;
+            if let Some(index) = timeouts.iter().position(|timeout| {
+                if let TimeoutKind::ClientRequestTimeout(rq) = &timeout.info {
+                    let client_request = &client_rq.timeout_info;
 
-                        return rq.sender == client_request.sender
-                            && rq.session == client_request.session
-                            && rq.seq_no == client_request.seq_no;
-                    }
+                    return rq.sender == client_request.sender
+                        && rq.session == client_request.session
+                        && rq.seq_no == client_request.seq_no;
+                }
 
-                    false
-                })
-                .map(|index| {
-                    // Remove the timeout from the list
-                    timeouts.swap_remove(index);
-                });
+                false
+            }) {
+                // Remove the timeout from the list
+                timeouts.swap_remove(index);
+            }
         }
     }
 
     /// Remove all of the timeouts that are present in the given list (or all timeouts if there is no list)
     fn handle_clear_client_rqs(&mut self, requests: Option<Vec<ClientRqInfo>>) {
         self.pending_timeouts
-            .extract_if(|timeout, timeouts| {
+            .extract_if(|_timeout, timeouts| {
                 timeouts
                     .extract_if(|rq| {
                         match &rq.info {
                             TimeoutKind::ClientRequestTimeout(rq_info) => {
-                                return if let Some(requests) = &requests {
-                                    return requests.contains(&rq_info);
+                                if let Some(requests) = &requests {
+                                    requests.contains(rq_info)
                                 } else {
                                     //We want to delete all of the client request timeouts
                                     true
-                                };
+                                }
                             }
                             _ => false,
                         }
@@ -475,17 +474,17 @@ impl TimeoutWorker {
         let mut total_removed = Vec::new();
 
         self.pending_timeouts
-            .extract_if(|timeout, timeout_rqs| {
+            .extract_if(|_timeout, timeout_rqs| {
                 let mut removed: Vec<_> = timeout_rqs
                     .extract_if(|rq| {
                         match &rq.info {
                             TimeoutKind::Cst(rq_seq_no) => {
-                                return if let Some(seq_no) = &seq_no {
-                                    return *seq_no == *rq_seq_no;
+                                if let Some(seq_no) = &seq_no {
+                                    *seq_no == *rq_seq_no
                                 } else {
                                     // We want to delete all of the cst timeouts
                                     true
-                                };
+                                }
                             }
                             _ => false,
                         }
@@ -508,17 +507,17 @@ impl TimeoutWorker {
         let mut total_removed = Vec::new();
 
         self.pending_timeouts
-            .extract_if(|timeout, timeout_rqs| {
+            .extract_if(|_timeout, timeout_rqs| {
                 let mut removed: Vec<_> = timeout_rqs
                     .extract_if(|rq| {
                         match &rq.info {
                             TimeoutKind::Reconfiguration(rq_seq_no) => {
-                                return if let Some(seq_no) = &seq_no {
-                                    return *seq_no == *rq_seq_no;
+                                if let Some(seq_no) = &seq_no {
+                                    *seq_no == *rq_seq_no
                                 } else {
                                     // We want to delete all of the cst timeouts
                                     true
-                                };
+                                }
                             }
                             _ => false,
                         }
@@ -544,10 +543,7 @@ impl TimeoutWorker {
         //Clear all of the pending timeouts
         for timeouts in self.pending_timeouts.values_mut() {
             timeouts
-                .extract_if(|rq| match &rq.info {
-                    TimeoutKind::ClientRequestTimeout(_) => true,
-                    _ => false,
-                })
+                .extract_if(|rq| matches!(&rq.info, TimeoutKind::ClientRequestTimeout(_)))
                 .for_each(|timeout| {
                     timeouts_cleared.push(timeout.info);
                 });
@@ -586,7 +582,7 @@ impl TimeoutWorker {
 
 impl TimeoutRequest {
     fn is_disabled(&self) -> bool {
-        return self.notifications_needed <= self.notifications_received.len() as u32;
+        self.notifications_needed <= self.notifications_received.len() as u32
     }
 
     fn register_received_from(&mut self, from: NodeId) -> bool {
@@ -600,7 +596,7 @@ impl TimeoutRequest {
             self.notifications_needed
         );
 
-        return self.is_disabled();
+        self.is_disabled()
     }
 }
 

@@ -86,9 +86,9 @@ impl<O> IntoIterator for PreProcessorOutputMessage<O> {
     }
 }
 
-impl<O> Into<Vec<StoredMessage<O>>> for PreProcessorOutputMessage<O> {
-    fn into(self) -> Vec<StoredMessage<O>> {
-        self.deduped_requests
+impl<O> From<PreProcessorOutputMessage<O>> for Vec<StoredMessage<O>> {
+    fn from(value: PreProcessorOutputMessage<O>) -> Self {
+        value.deduped_requests
     }
 }
 

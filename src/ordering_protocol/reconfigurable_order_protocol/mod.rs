@@ -1,4 +1,3 @@
-use crate::ordering_protocol;
 use crate::serialize::ReconfigurationProtocolMessage;
 use atlas_common::error::*;
 use atlas_common::node_id::NodeId;

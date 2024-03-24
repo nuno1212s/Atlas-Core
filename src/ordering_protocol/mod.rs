@@ -1,8 +1,11 @@
-use anyhow::anyhow;
+#![allow(clippy::non_canonical_partial_ord_impl, clippy::large_enum_variant)]
+
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+
+use anyhow::anyhow;
 
 use atlas_common::crypto::hash::Digest;
 use atlas_common::error::*;
@@ -15,12 +18,10 @@ use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::StoredMessage;
 use atlas_metrics::benchmarks::BatchMeta;
 
-use crate::messages::{ClientRqInfo, RequestMessage};
+use crate::messages::ClientRqInfo;
 use crate::ordering_protocol::networking::serialize::{
     OrderingProtocolMessage, PermissionedOrderingProtocolMessage,
 };
-use crate::ordering_protocol::networking::OrderProtocolSendNode;
-use crate::persistent_log::OrderingProtocolLog;
 use crate::request_pre_processing::{BatchOutput, RequestPreProcessor};
 use crate::timeouts::{RqTimeout, Timeouts};
 
@@ -30,9 +31,9 @@ pub mod permissioned;
 pub mod reconfigurable_order_protocol;
 
 pub type View<POP: PermissionedOrderingProtocolMessage> =
-    <POP as PermissionedOrderingProtocolMessage>::ViewInfo;
+<POP as PermissionedOrderingProtocolMessage>::ViewInfo;
 pub type ShareableConsensusMessage<RQ, OP> =
-    Arc<ReadOnly<StoredMessage<<OP as OrderingProtocolMessage<RQ>>::ProtocolMessage>>>;
+Arc<ReadOnly<StoredMessage<<OP as OrderingProtocolMessage<RQ>>::ProtocolMessage>>>;
 pub type ShareableMessage<P> = Arc<ReadOnly<StoredMessage<P>>>;
 
 pub type ProtocolMessage<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProtocolMessage;
@@ -60,16 +61,19 @@ pub trait OrderProtocolTolerance {
     fn get_f_for_n(n: usize) -> usize;
 }
 
+type OPResult<RQ, SER> = OPPollResult<DecisionMetadata<RQ, SER>, ProtocolMessage<RQ, SER>, RQ>;
+type OPExResult<RQ, SER> = OPExecResult<DecisionMetadata<RQ, SER>, ProtocolMessage<RQ, SER>, RQ>;
+
 /// The trait for an ordering protocol to be implemented in Atlas
 ///
 /// An ordering protocol is meant to order various requests (of type RQ) received
 /// into a globally accepted order in a fault tolerant scenario, which is can then be used by FT applications
 ///
 /// The generic type presented here is the type of the request that the ordering protocol will be ordering
-/// This can be whatever the developer wants, as long as it implements the [atlas_common::serialization_helper::SerType] trait
+/// This can be whatever the developer wants, as long as it implements the [SerType] trait
 pub trait OrderingProtocol<RQ>: OrderProtocolTolerance + Orderable
-where
-    RQ: SerType,
+    where
+        RQ: SerType,
 {
     /// The type which implements OrderingProtocolMessage, to be implemented by the developer
     type Serialization: OrderingProtocolMessage<RQ> + 'static;
@@ -95,28 +99,14 @@ where
     /// Poll from the ordering protocol in order to know what we should do next
     /// We do this to check if there are already messages waiting to be executed that were received ahead of time and stored.
     /// Or whether we should run state transfer or wait for messages from other replicas
-    fn poll(
-        &mut self,
-    ) -> Result<
-        OPPollResult<
-            DecisionMetadata<RQ, Self::Serialization>,
-            ProtocolMessage<RQ, Self::Serialization>,
-            RQ,
-        >,
-    >;
+    fn poll(&mut self) -> Result<OPResult<RQ, Self::Serialization>>;
 
     /// Process a protocol message that we have received
     /// This can be a message received from the poll() method or a message received from other replicas.
     fn process_message(
         &mut self,
         message: ShareableConsensusMessage<RQ, Self::Serialization>,
-    ) -> Result<
-        OPExecResult<
-            DecisionMetadata<RQ, Self::Serialization>,
-            ProtocolMessage<RQ, Self::Serialization>,
-            RQ,
-        >,
-    >;
+    ) -> Result<OPExResult<RQ, Self::Serialization>>;
 
     /// Install a given sequence number
     fn install_seq_no(&mut self, seq_no: SeqNo) -> Result<()>;
@@ -125,13 +115,7 @@ where
     fn handle_timeout(
         &mut self,
         timeout: Vec<RqTimeout>,
-    ) -> Result<
-        OPExecResult<
-            DecisionMetadata<RQ, Self::Serialization>,
-            ProtocolMessage<RQ, Self::Serialization>,
-            RQ,
-        >,
-    >;
+    ) -> Result<OPExResult<RQ, Self::Serialization>>;
 }
 
 /// A permissioned ordering protocol, meaning only a select few are actually part of the quorum that decides the
@@ -436,8 +420,8 @@ impl JoinInfo {
 }
 
 impl<MD, P, D> Debug for OPPollResult<MD, P, D>
-where
-    P: Debug,
+    where
+        P: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -453,7 +437,7 @@ where
             OPPollResult::RePoll => {
                 write!(f, "RePoll")
             }
-            OPPollResult::ProgressedDecision(clear_ahead, rqs) => {
+            OPPollResult::ProgressedDecision(_clear_ahead, rqs) => {
                 write!(f, "{} committed decisions", rqs.len())
             }
             OPPollResult::QuorumJoined(clear_ahead, decs, node) => {
@@ -614,6 +598,10 @@ impl<RQ> BatchedDecision<RQ> {
 
     pub fn len(&self) -> usize {
         self.inner.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn add_message(&mut self, message: StoredMessage<RQ>) {

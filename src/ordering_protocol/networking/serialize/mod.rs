@@ -4,8 +4,6 @@ use atlas_common::ordering::Orderable;
 use atlas_common::serialization_helper::SerType;
 use atlas_communication::message::Header;
 use atlas_communication::reconfiguration::NetworkInformationProvider;
-#[cfg(feature = "serialize_serde")]
-use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
 

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::ordering_protocol::BatchedDecision;
 use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::node_id::NodeId;

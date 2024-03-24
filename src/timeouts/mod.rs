@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::iter;
 use std::marker::PhantomData;
 use std::time::{Duration, Instant};
@@ -103,7 +105,6 @@ impl Timeouts {
     /// This handle can then be used everywhere timeouts are needed.
     pub fn new<RQ: SessionBased + 'static>(
         node_id: NodeId,
-        iteration_delay: Duration,
         default_timeout: Duration,
         loopback_channel: ChannelSyncTx<Message>,
     ) -> Self {
@@ -119,7 +120,7 @@ impl Timeouts {
     pub fn timeout_client_requests(&self, timeout: Duration, requests: Vec<ClientRqInfo>) {
         let requests: Vec<TimeoutKind> = requests
             .into_iter()
-            .map(|rq_info| TimeoutKind::ClientRequestTimeout(rq_info))
+            .map(TimeoutKind::ClientRequestTimeout)
             .collect();
 
         let res = self
@@ -132,11 +133,11 @@ impl Timeouts {
                 timeout_info: requests,
             }));
 
-        match res {
-            Err(_) => {
-                warn!("Discarding Client Request timeout message as queue is already full")
-            }
-            _ => {}
+        if let Err(err) = res {
+            warn!(
+                "Discarding Client Request timeout message as queue is already full {:?}",
+                err
+            )
         }
     }
 
@@ -149,11 +150,11 @@ impl Timeouts {
                 ReceivedRequest::PrePrepareRequestReceived(from, recvd_rqs),
             ));
 
-        match res {
-            Err(_) => {
-                warn!("Discarding pre prepare timeout message as queue is already full")
-            }
-            _ => {}
+        if let Err(err) = res {
+            warn!(
+                "Discarding pre prepare timeout message as queue is already full {:?}",
+                err
+            )
         }
     }
 
@@ -272,9 +273,9 @@ impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
     }
 
     fn run(self)
-    where
-        RQ: SessionBased,
-        WP: WorkPartitioner<RQ>,
+        where
+            RQ: SessionBased,
+            WP: WorkPartitioner<RQ>,
     {
         loop {
             let message = match self.work_rx.recv() {
@@ -316,9 +317,9 @@ impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
     }
 
     fn handle_timeout_request(&self, request: RqTimeoutMessage)
-    where
-        RQ: SessionBased,
-        WP: WorkPartitioner<RQ>,
+        where
+            RQ: SessionBased,
+            WP: WorkPartitioner<RQ>,
     {
         let RqTimeoutMessage {
             timeout,
@@ -357,9 +358,9 @@ impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
     }
 
     fn handle_messages_received(&self, messages: ReceivedRequest)
-    where
-        RQ: SessionBased,
-        WP: WorkPartitioner<RQ>,
+        where
+            RQ: SessionBased,
+            WP: WorkPartitioner<RQ>,
     {
         match messages {
             ReceivedRequest::PrePrepareRequestReceived(sender, messages) => {
@@ -375,7 +376,7 @@ impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
 
                 for (work, worker) in iter::zip(separated_vecs, &self.worker_channel) {
                     let work_msg = TimeoutWorkerMessage::MessagesReceived(
-                        ReceivedRequest::PrePrepareRequestReceived(sender.clone(), work),
+                        ReceivedRequest::PrePrepareRequestReceived(sender, work),
                     );
 
                     worker
@@ -400,7 +401,7 @@ impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
             ReceivedRequest::Reconfiguration(sender, seq) => {
                 self.worker_channel[0]
                     .send_return(TimeoutWorkerMessage::MessagesReceived(
-                        ReceivedRequest::Reconfiguration(sender.clone(), seq),
+                        ReceivedRequest::Reconfiguration(sender, seq),
                     ))
                     .expect("Failed to send worker message");
             }
@@ -408,9 +409,9 @@ impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
     }
 
     fn handle_clear_client_timeouts(&self, clear_timeouts: Option<Vec<ClientRqInfo>>)
-    where
-        RQ: SessionBased,
-        WP: WorkPartitioner<RQ>,
+        where
+            RQ: SessionBased,
+            WP: WorkPartitioner<RQ>,
     {
         let mut separated_vecs = if clear_timeouts.is_some() {
             let vec_length = clear_timeouts.as_ref().map(|t| t.len()).unwrap();
@@ -438,8 +439,8 @@ impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
     }
 
     fn init_worker_separated_vec<T, F>(&self, capacity: F) -> Vec<T>
-    where
-        F: FnMut() -> T,
+        where
+            F: FnMut() -> T,
     {
         iter::repeat_with(capacity)
             .take(self.worker_count as usize)
@@ -451,14 +452,10 @@ impl PartialEq for TimeoutKind {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::ClientRequestTimeout(client_1), Self::ClientRequestTimeout(client_2)) => {
-                return client_1 == client_2;
+                client_1 == client_2
             }
-            (Self::Cst(seq_no_1), Self::Cst(seq_no_2)) => {
-                return seq_no_1 == seq_no_2;
-            }
-            (Self::LogTransfer(seq_no_1), Self::LogTransfer(seq_no_2)) => {
-                return seq_no_1 == seq_no_2;
-            }
+            (Self::Cst(seq_no_1), Self::Cst(seq_no_2)) => seq_no_1 == seq_no_2,
+            (Self::LogTransfer(seq_no_1), Self::LogTransfer(seq_no_2)) => seq_no_1 == seq_no_2,
             (_, _) => false,
         }
     }
@@ -479,18 +476,20 @@ impl RqTimeout {
 }
 
 impl TimeoutPhase {
+    #![allow(unreachable_patterns)]
+
     fn timeout_count(&self) -> usize {
-        return match self {
+        match self {
             Self::TimedOut(times, _) => *times,
             _ => 0,
-        };
+        }
     }
 
     fn timeout_instant(&self) -> Instant {
-        return match self {
-            Self::TimedOut(_, instant) => instant.clone(),
+        match self {
+            Self::TimedOut(_, instant) => *instant,
             _ => unreachable!(),
-        };
+        }
     }
 }
 
@@ -500,16 +499,16 @@ fn launch_orchestrator_thread<WP, RQ>(
     timeout_dur: Duration,
     loopback: ChannelSyncTx<Message>,
 ) -> Timeouts
-where
-    RQ: SessionBased + 'static,
-    WP: WorkPartitioner<RQ> + 'static,
+    where
+        RQ: SessionBased + 'static,
+        WP: WorkPartitioner<RQ> + 'static,
 {
     let (tx, rx) = channel::new_bounded_sync(CHANNEL_SIZE, Some("Timeout Orchestrator Thread"));
 
     let mut workers = Vec::with_capacity(worker_count as usize);
 
     for i in 0..worker_count {
-        let worker = TimeoutWorker::new(i, node_id, timeout_dur.clone(), loopback.clone());
+        let worker = TimeoutWorker::start_worker(i, node_id, timeout_dur, loopback.clone());
 
         workers.push(worker);
     }
@@ -518,7 +517,7 @@ where
         TimeoutOrchestrator::new(worker_count, rx, workers);
 
     std::thread::Builder::new()
-        .name(format!("Timeout-Orchestrator"))
+        .name("Timeout-Orchestrator".to_string())
         .spawn(move || orchestrator.run())
         .expect("Failed to launch timeout orchestrator thread");
 

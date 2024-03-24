@@ -1,16 +1,10 @@
-use crate::ordering_protocol::loggable::{PProof, PersistentOrderProtocolTypes};
 use crate::ordering_protocol::networking::serialize::{
     OrderingProtocolMessage, PermissionedOrderingProtocolMessage,
 };
 use crate::ordering_protocol::{DecisionMetadata, ShareableConsensusMessage, View};
-#[cfg(feature = "serialize_serde")]
-use ::serde::{Deserialize, Serialize};
 use atlas_common::error::*;
-use atlas_common::globals::ReadOnly;
 use atlas_common::ordering::SeqNo;
 use atlas_common::serialization_helper::SerType;
-use atlas_communication::message::StoredMessage;
-use std::sync::Arc;
 
 /// How should the data be written and response delivered?
 /// If Sync is chosen the function will block on the call and return the result of the operation

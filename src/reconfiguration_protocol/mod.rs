@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::serialize;
 use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
 use atlas_common::crypto::threshold_crypto::{PrivateKeyPart, PublicKeyPart, PublicKeySet};
 use atlas_common::error::*;
