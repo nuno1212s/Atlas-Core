@@ -61,8 +61,8 @@ pub trait OrderProtocolTolerance {
     fn get_f_for_n(n: usize) -> usize;
 }
 
-type OPResult<RQ, SER> = OPPollResult<DecisionMetadata<RQ, SER>, ProtocolMessage<RQ, SER>, RQ>;
-type OPExResult<RQ, SER> = OPExecResult<DecisionMetadata<RQ, SER>, ProtocolMessage<RQ, SER>, RQ>;
+pub type OPResult<RQ, SER> = OPPollResult<DecisionMetadata<RQ, SER>, ProtocolMessage<RQ, SER>, RQ>;
+pub type OPExResult<RQ, SER> = OPExecResult<DecisionMetadata<RQ, SER>, ProtocolMessage<RQ, SER>, RQ>;
 
 /// The trait for an ordering protocol to be implemented in Atlas
 ///
