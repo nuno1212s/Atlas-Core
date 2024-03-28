@@ -1,4 +1,8 @@
-#![allow(clippy::non_canonical_partial_ord_impl, clippy::large_enum_variant, type_alias_bounds)]
+#![allow(
+    clippy::non_canonical_partial_ord_impl,
+    clippy::large_enum_variant,
+    type_alias_bounds
+)]
 
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
@@ -31,9 +35,9 @@ pub mod permissioned;
 pub mod reconfigurable_order_protocol;
 
 pub type View<POP: PermissionedOrderingProtocolMessage> =
-<POP as PermissionedOrderingProtocolMessage>::ViewInfo;
+    <POP as PermissionedOrderingProtocolMessage>::ViewInfo;
 pub type ShareableConsensusMessage<RQ, OP> =
-Arc<ReadOnly<StoredMessage<<OP as OrderingProtocolMessage<RQ>>::ProtocolMessage>>>;
+    Arc<ReadOnly<StoredMessage<<OP as OrderingProtocolMessage<RQ>>::ProtocolMessage>>>;
 pub type ShareableMessage<P> = Arc<ReadOnly<StoredMessage<P>>>;
 
 pub type ProtocolMessage<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProtocolMessage;
@@ -62,7 +66,8 @@ pub trait OrderProtocolTolerance {
 }
 
 pub type OPResult<RQ, SER> = OPPollResult<DecisionMetadata<RQ, SER>, ProtocolMessage<RQ, SER>, RQ>;
-pub type OPExResult<RQ, SER> = OPExecResult<DecisionMetadata<RQ, SER>, ProtocolMessage<RQ, SER>, RQ>;
+pub type OPExResult<RQ, SER> =
+    OPExecResult<DecisionMetadata<RQ, SER>, ProtocolMessage<RQ, SER>, RQ>;
 
 /// The trait for an ordering protocol to be implemented in Atlas
 ///
@@ -72,8 +77,8 @@ pub type OPExResult<RQ, SER> = OPExecResult<DecisionMetadata<RQ, SER>, ProtocolM
 /// The generic type presented here is the type of the request that the ordering protocol will be ordering
 /// This can be whatever the developer wants, as long as it implements the [SerType] trait
 pub trait OrderingProtocol<RQ>: OrderProtocolTolerance + Orderable
-    where
-        RQ: SerType,
+where
+    RQ: SerType,
 {
     /// The type which implements OrderingProtocolMessage, to be implemented by the developer
     type Serialization: OrderingProtocolMessage<RQ> + 'static;
@@ -420,8 +425,8 @@ impl JoinInfo {
 }
 
 impl<MD, P, D> Debug for OPPollResult<MD, P, D>
-    where
-        P: Debug,
+where
+    P: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

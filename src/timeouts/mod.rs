@@ -273,9 +273,9 @@ impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
     }
 
     fn run(self)
-        where
-            RQ: SessionBased,
-            WP: WorkPartitioner<RQ>,
+    where
+        RQ: SessionBased,
+        WP: WorkPartitioner<RQ>,
     {
         loop {
             let message = match self.work_rx.recv() {
@@ -317,9 +317,9 @@ impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
     }
 
     fn handle_timeout_request(&self, request: RqTimeoutMessage)
-        where
-            RQ: SessionBased,
-            WP: WorkPartitioner<RQ>,
+    where
+        RQ: SessionBased,
+        WP: WorkPartitioner<RQ>,
     {
         let RqTimeoutMessage {
             timeout,
@@ -358,9 +358,9 @@ impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
     }
 
     fn handle_messages_received(&self, messages: ReceivedRequest)
-        where
-            RQ: SessionBased,
-            WP: WorkPartitioner<RQ>,
+    where
+        RQ: SessionBased,
+        WP: WorkPartitioner<RQ>,
     {
         match messages {
             ReceivedRequest::PrePrepareRequestReceived(sender, messages) => {
@@ -409,9 +409,9 @@ impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
     }
 
     fn handle_clear_client_timeouts(&self, clear_timeouts: Option<Vec<ClientRqInfo>>)
-        where
-            RQ: SessionBased,
-            WP: WorkPartitioner<RQ>,
+    where
+        RQ: SessionBased,
+        WP: WorkPartitioner<RQ>,
     {
         let mut separated_vecs = if clear_timeouts.is_some() {
             let vec_length = clear_timeouts.as_ref().map(|t| t.len()).unwrap();
@@ -439,8 +439,8 @@ impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
     }
 
     fn init_worker_separated_vec<T, F>(&self, capacity: F) -> Vec<T>
-        where
-            F: FnMut() -> T,
+    where
+        F: FnMut() -> T,
     {
         iter::repeat_with(capacity)
             .take(self.worker_count as usize)
@@ -499,9 +499,9 @@ fn launch_orchestrator_thread<WP, RQ>(
     timeout_dur: Duration,
     loopback: ChannelSyncTx<Message>,
 ) -> Timeouts
-    where
-        RQ: SessionBased + 'static,
-        WP: WorkPartitioner<RQ> + 'static,
+where
+    RQ: SessionBased + 'static,
+    WP: WorkPartitioner<RQ> + 'static,
 {
     let (tx, rx) = channel::new_bounded_sync(CHANNEL_SIZE, Some("Timeout Orchestrator Thread"));
 

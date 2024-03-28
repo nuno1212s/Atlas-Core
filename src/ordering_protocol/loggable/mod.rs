@@ -77,9 +77,7 @@ where
     ) -> Result<PProof<RQ, OPM, POP>>;
 
     /// Decompose a given proof into it's metadata and messages, ready to be persisted
-    fn decompose_proof(
-        proof: &PProof<RQ, OPM, POP>,
-    ) -> DecomposedProof<RQ, OPM>;
+    fn decompose_proof(proof: &PProof<RQ, OPM, POP>) -> DecomposedProof<RQ, OPM>;
 
     /// Extract the proof out of the protocol decision proof
     fn get_requests_in_proof(proof: &PProof<RQ, OPM, POP>)

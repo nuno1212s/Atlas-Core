@@ -138,9 +138,9 @@ pub trait ReconfigurationProtocol: Send + Sync + 'static {
         reconfig: ReconfigurationMessageHandler,
         min_stable_node_count: usize,
     ) -> Result<Self>
-        where
-            NT: RegularNetworkStub<Self::Serialization> + 'static,
-            Self: Sized;
+    where
+        NT: RegularNetworkStub<Self::Serialization> + 'static,
+        Self: Sized;
 
     /// Handle a timeout from the timeouts layer
     fn handle_timeout(&self, timeouts: Vec<RqTimeout>) -> Result<ReconfigResponse>;
