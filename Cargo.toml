@@ -20,8 +20,9 @@ serialize_capnp = ["atlas-capnp", "atlas-common/serialize_capnp"]
 default = ["serialize_serde"]
 
 [dependencies]
-anyhow = "1.0"
-thiserror = "1.0"
+anyhow = "1"
+thiserror = "1"
+getset = "0"
 atlas-common = { path = "../Atlas-Common" }
 atlas-communication = { path = "../Atlas-Communication" }
 atlas-capnp = { path = "../Atlas-capnp", optional = true }

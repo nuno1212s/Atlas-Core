@@ -128,7 +128,6 @@ impl<P> ReplyMessage<P> {
 
 /// The `Message` type encompasses all the messages traded between different
 /// asynchronous tasks in the system.
-///
 pub enum Message {
     /// We received a timeout from the timeouts layer.
     Timeout(TimedOut),
