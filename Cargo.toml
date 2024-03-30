@@ -23,6 +23,7 @@ default = ["serialize_serde"]
 anyhow = "1"
 thiserror = "1"
 getset = "0"
+dyn-clone = "1"
 atlas-common = { path = "../Atlas-Common" }
 atlas-communication = { path = "../Atlas-Communication" }
 atlas-capnp = { path = "../Atlas-capnp", optional = true }
@@ -31,6 +32,10 @@ serde = { version = "*", optional = true }
 crossbeam = "0.8.2"
 intmap = "2.0.0"
 either = "1.10.0"
+itertools = "0"
 
 chrono = "0.4.24"
 log = "0.4.17"
+
+[dev-dependencies]
+lazy_static = "1"
