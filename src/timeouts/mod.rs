@@ -1,525 +1,317 @@
-#![allow(dead_code)]
+use std::any::Any;
+use std::cmp::Ordering;
+use std::fmt::Debug;
+use std::hash::Hash;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
-use std::iter;
-use std::marker::PhantomData;
-use std::time::{Duration, Instant};
+use dyn_clone::DynClone;
+use getset::{CopyGetters, Getters};
+use itertools::Itertools;
 
-use log::{error, warn};
-
-use atlas_common::channel;
-use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
+use atlas_common::channel::{new_bounded_sync, ChannelSyncTx};
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::SeqNo;
 
-use crate::messages::{ClientRqInfo, Message, SessionBased};
-use crate::request_pre_processing::work_dividers::WDRoundRobin;
-use crate::request_pre_processing::WorkPartitioner;
-use crate::timeouts::worker::{TimeoutWorker, TimeoutWorkerMessage};
+use crate::request_pre_processing::operation_key_raw;
+use crate::timeouts::timeout::{TimeoutModHandle, TimeoutableMod};
+use crate::timeouts::worker::WorkerMessage;
 
+mod tests;
+pub mod timeout;
 mod worker;
 
-const CHANNEL_SIZE: usize = 16384;
-
-///Contains the requests that have just been timed out
-pub type Timeout = Vec<TimeoutKind>;
-
-/// Contains a vector of requests
-pub type TimedOut = Vec<RqTimeout>;
-
-type TimeoutWorkerId = u32;
-
-#[derive(Eq, Ord, PartialOrd, Clone, Debug)]
-pub enum TimeoutKind {
-    ///Relates to the timeout of a client request.
-    /// Stores the client who sent it, along with the request
-    /// session and request sequence number
-    ClientRequestTimeout(ClientRqInfo),
-
-    ///TODO: Maybe add a timeout for synchronizer messages?
-    /// Having a timeout for STOP messages is essential for liveness
-    //Sync(),
-
-    /// As for CST messages, these messages aren't particularly ordered, they are just
-    /// for each own node to know to what messages the peers are responding to.
-    Cst(SeqNo),
-
-    /// As for LTP messages, they are also not particularly ordered, similarly to the
-    /// messages sent by the state transfer protocol
-    LogTransfer(SeqNo),
-
-    /// Reconfiguration message timeouts
-    Reconfiguration(SeqNo),
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+pub enum TimeoutID {
+    SeqNoBased(SeqNo),
+    SessionBased {
+        session: SeqNo,
+        seq_no: SeqNo,
+        from: NodeId,
+    },
 }
 
-#[derive(Clone, Debug)]
-pub enum TimeoutPhase {
-    /// The given request has timed out X times, the last of which was in Y instant
-    TimedOut(usize, Instant),
+#[derive(Hash, Ord, Eq, PartialOrd, PartialEq, Clone, Debug, Getters, CopyGetters)]
+pub struct TimeoutIdentification {
+    #[get = "pub"]
+    mod_id: Arc<str>,
+    #[get = "pub"]
+    timeout_id: TimeoutID,
 }
 
-/// A timeout for a given client request
-#[derive(Clone, Debug)]
-pub struct RqTimeout {
-    timeout_kind: TimeoutKind,
-    timeout_phase: TimeoutPhase,
+/// A time-out that has occurred
+#[derive(Debug, CopyGetters, Getters)]
+pub struct Timeout {
+    #[get = "pub"]
+    id: TimeoutIdentification,
+    #[get_copy = "pub"]
+    timeout_count: usize,
+    #[get_copy = "pub"]
+    timeout_time: SystemTime,
+    extra_info: Option<Box<dyn TimeOutable>>,
 }
 
-type TimeoutMessage = MessageType;
-
-enum MessageType {
-    TimeoutRequest(RqTimeoutMessage),
-    MessagesReceived(ReceivedRequest),
-    ResetClientTimeouts(Duration),
-    ClearClientTimeouts(Option<Vec<ClientRqInfo>>),
-    ClearCstTimeouts(Option<SeqNo>),
-    ClearReconfigTimeouts(Option<SeqNo>),
+#[derive(CopyGetters, Getters)]
+struct TimeoutRequest {
+    #[get]
+    id: TimeoutIdentification,
+    #[get]
+    duration: Duration,
+    #[get_copy]
+    needed_acks: usize,
+    #[get_copy]
+    is_cumulative: bool,
+    extra_info: Option<Box<dyn TimeOutable>>,
 }
 
-enum ReceivedRequest {
-    //The node that proposed the message and all the requests contained within it
-    PrePrepareRequestReceived(NodeId, Vec<ClientRqInfo>),
-    //Receive a CST message relating to the following sequence number from the given
-    //Node
-    Cst(NodeId, SeqNo),
-    // Log transfer message
-    LT(NodeId, SeqNo),
-    // Received a reconfiguration request response
-    Reconfiguration(NodeId, SeqNo),
+/// A timeout trait, representing the behaviour needed from a timeout request
+pub trait TimeOutable: DynClone + Debug + Send {
+    /// Turn a box of this object into a box of dyn Any, so it can be cast
+    fn into_any(self: Box<Self>) -> Box<dyn Any>;
+
+    /// casting to any trait object
+    fn as_any(&self) -> &dyn Any;
 }
 
-struct RqTimeoutMessage {
-    timeout: Duration,
-    notifications_needed: u32,
-    timeout_info: Timeout,
+#[derive(Getters, CopyGetters, Debug)]
+struct TimeoutAck {
+    #[get = "pub"]
+    id: TimeoutIdentification,
+    #[get_copy]
+    from: NodeId,
 }
 
 #[derive(Clone)]
-/// The handle to the timeouts module.
-/// All messages destined to the timeouts should be passed through here
-pub struct Timeouts {
-    handle: ChannelSyncTx<TimeoutMessage>,
+pub struct TimeoutsHandle {
+    worker_handles: Vec<ChannelSyncTx<WorkerMessage>>,
 }
 
-impl Timeouts {
-    ///Initialize the timeouts thread and return a handle to it
-    /// This handle can then be used everywhere timeouts are needed.
-    pub fn new<RQ: SessionBased + 'static>(
-        node_id: NodeId,
-        default_timeout: Duration,
-        loopback_channel: ChannelSyncTx<Message>,
-    ) -> Self {
-        launch_orchestrator_thread::<WDRoundRobin, RQ>(
-            2,
-            node_id,
-            default_timeout,
-            loopback_channel,
-        )
-    }
-
-    /// Start a timeout request on the list of digests that have been provided
-    pub fn timeout_client_requests(&self, timeout: Duration, requests: Vec<ClientRqInfo>) {
-        let requests: Vec<TimeoutKind> = requests
-            .into_iter()
-            .map(TimeoutKind::ClientRequestTimeout)
-            .collect();
-
-        let res = self
-            .handle
-            .try_send_return(TimeoutMessage::TimeoutRequest(RqTimeoutMessage {
-                timeout,
-                // we choose 1 here because we only need to receive one valid pre prepare containing
-                // this request for it to be considered valid
-                notifications_needed: 1,
-                timeout_info: requests,
-            }));
-
-        if let Err(err) = res {
-            warn!(
-                "Discarding Client Request timeout message as queue is already full {:?}",
-                err
-            )
-        }
-    }
-
-    /// Notify that a pre prepare with the following requests has been received and we must therefore
-    /// Disable any timeouts pertaining to the received requests
-    pub fn received_pre_prepare(&self, from: NodeId, recvd_rqs: Vec<ClientRqInfo>) {
-        let res = self
-            .handle
-            .try_send_return(TimeoutMessage::MessagesReceived(
-                ReceivedRequest::PrePrepareRequestReceived(from, recvd_rqs),
-            ));
-
-        if let Err(err) = res {
-            warn!(
-                "Discarding pre prepare timeout message as queue is already full {:?}",
-                err
-            )
-        }
-    }
-
-    /// Set the timeout phase of all timeouts to the initial state (0 timeouts) and re call all of the timeouts
-    pub fn reset_all_client_rq_timeouts(&self, duration: Duration) {
-        self.handle
-            .send_return(TimeoutMessage::ResetClientTimeouts(duration))
-            .expect("Failed to contact timeout thread")
-    }
-
-    /// Cancel timeouts of player requests.
-    /// This accepts an option. If this Option is None, then the
-    /// timeouts for all client requests are going to be disabled
-    pub fn cancel_client_rq_timeouts(&self, requests_to_clear: Option<Vec<ClientRqInfo>>) {
-        self.handle
-            .send_return(TimeoutMessage::ClearClientTimeouts(requests_to_clear))
-            .expect("Failed to contact timeout thread")
-    }
-
-    /// Timeout a CST request
-    pub fn timeout_cst_request(&self, timeout: Duration, requests_needed: u32, seq_no: SeqNo) {
-        self.handle
-            .send_return(TimeoutMessage::TimeoutRequest(RqTimeoutMessage {
-                timeout,
-                notifications_needed: requests_needed,
-                timeout_info: vec![TimeoutKind::Cst(seq_no)],
-            }))
-            .expect("Failed to contact timeout thread");
-    }
-
-    pub fn timeout_lt_request(&self, timeout: Duration, requests_needed: u32, seq_no: SeqNo) {
-        self.handle
-            .send_return(TimeoutMessage::TimeoutRequest(RqTimeoutMessage {
-                timeout,
-                notifications_needed: requests_needed,
-                timeout_info: vec![TimeoutKind::LogTransfer(seq_no)],
-            }))
-            .expect("Failed to contact timeout thread");
-    }
-
-    pub fn timeout_reconfig_request(&self, timeout: Duration, requests_needed: u32, seq_no: SeqNo) {
-        self.handle
-            .send_return(TimeoutMessage::TimeoutRequest(RqTimeoutMessage {
-                timeout,
-                notifications_needed: requests_needed,
-                timeout_info: vec![TimeoutKind::Reconfiguration(seq_no)],
-            }))
-            .expect("Failed to contact timeout thread");
-    }
-
-    /// Handle having received a cst request
-    pub fn received_cst_request(&self, from: NodeId, seq_no: SeqNo) {
-        self.handle
-            .send_return(TimeoutMessage::MessagesReceived(ReceivedRequest::Cst(
-                from, seq_no,
-            )))
-            .expect("Failed to contact timeout thread");
-    }
-
-    /// Handle having received a cst request
-    pub fn received_log_request(&self, from: NodeId, seq_no: SeqNo) {
-        self.handle
-            .send_return(TimeoutMessage::MessagesReceived(ReceivedRequest::LT(
-                from, seq_no,
-            )))
-            .expect("Failed to contact timeout thread");
-    }
-
-    pub fn received_reconfig_request(&self, from: NodeId, seq_no: SeqNo) {
-        self.handle
-            .send_return(TimeoutMessage::MessagesReceived(
-                ReceivedRequest::Reconfiguration(from, seq_no),
-            ))
-            .expect("Failed to contact timeout thread");
-    }
-
-    /// Cancel timeouts of CST messages.
-    /// This accepts an option. If this Option is None, then the
-    /// timeouts for all CST requests are going to be disabled.
-    pub fn cancel_cst_timeout(&self, seq_no: Option<SeqNo>) {
-        self.handle
-            .send_return(TimeoutMessage::ClearCstTimeouts(seq_no))
-            .expect("Failed to contact timeout thread");
-    }
-
-    /// Cancel timeouts of reconfig messages
-    pub fn cancel_reconfig_timeout(&self, seq_no: Option<SeqNo>) {
-        self.handle
-            .send_return(TimeoutMessage::ClearReconfigTimeouts(seq_no))
-            .expect("Failed to contact timeout thread")
-    }
-}
-
-struct TimeoutOrchestrator<WP, RQ> {
-    worker_count: u32,
-
-    work_rx: ChannelSyncRx<TimeoutMessage>,
-
-    worker_channel: Vec<ChannelSyncTx<TimeoutWorkerMessage>>,
-
-    work_partition: PhantomData<fn() -> (WP, RQ)>,
-}
-
-impl<WP, RQ> TimeoutOrchestrator<WP, RQ> {
-    fn new(
-        worker_count: u32,
-        work_rx: ChannelSyncRx<TimeoutMessage>,
-        workers: Vec<ChannelSyncTx<TimeoutWorkerMessage>>,
-    ) -> Self {
-        Self {
-            worker_count,
-            work_rx,
-            worker_channel: workers,
-            work_partition: Default::default(),
-        }
-    }
-
-    fn run(self)
-    where
-        RQ: SessionBased,
-        WP: WorkPartitioner<RQ>,
-    {
-        loop {
-            let message = match self.work_rx.recv() {
-                Ok(message) => message,
-                Err(error) => {
-                    error!("Timeout orchestrator failed to receive message {:?}", error);
-
-                    break;
-                }
-            };
-
-            match message {
-                TimeoutMessage::TimeoutRequest(request) => {
-                    self.handle_timeout_request(request);
-                }
-                TimeoutMessage::MessagesReceived(messages) => {
-                    self.handle_messages_received(messages);
-                }
-                TimeoutMessage::ResetClientTimeouts(duration) => {
-                    for work_channel in &self.worker_channel {
-                        work_channel
-                            .send_return(TimeoutWorkerMessage::ResetClientTimeouts(duration))
-                            .expect("Failed to send worker message")
-                    }
-                }
-                TimeoutMessage::ClearClientTimeouts(clear_timeouts) => {
-                    self.handle_clear_client_timeouts(clear_timeouts);
-                }
-                TimeoutMessage::ClearCstTimeouts(seq) => {
-                    self.worker_channel[0]
-                        .send_return(TimeoutWorkerMessage::ClearCstTimeouts(seq))
-                        .expect("Failed to contact worker");
-                }
-                TimeoutMessage::ClearReconfigTimeouts(seq) => self.worker_channel[0]
-                    .send_return(TimeoutWorkerMessage::ClearReconfigTimeouts(seq))
-                    .expect("Failed to contact worker"),
-            }
-        }
-    }
-
-    fn handle_timeout_request(&self, request: RqTimeoutMessage)
-    where
-        RQ: SessionBased,
-        WP: WorkPartitioner<RQ>,
-    {
-        let RqTimeoutMessage {
-            timeout,
-            notifications_needed,
-            timeout_info,
-        } = request;
-
-        let mut separated_vecs: Vec<Vec<TimeoutKind>> =
-            self.init_worker_separated_vec(|| Vec::with_capacity(timeout_info.len()));
-
-        for timeout in timeout_info {
-            match &timeout {
-                TimeoutKind::ClientRequestTimeout(client_rq) => {
-                    let worker =
-                        WP::get_worker_for_processed(client_rq, self.worker_count as usize);
-
-                    separated_vecs[worker].push(timeout);
-                }
-                _ => {
-                    separated_vecs[0].push(timeout);
-                }
-            }
-        }
-
-        for (work, worker) in iter::zip(separated_vecs, &self.worker_channel) {
-            let work_msg = TimeoutWorkerMessage::TimeoutRequest(RqTimeoutMessage {
-                timeout,
-                notifications_needed,
-                timeout_info: work,
-            });
-
-            worker
-                .send_return(work_msg)
-                .expect("Failed to send worker message");
-        }
-    }
-
-    fn handle_messages_received(&self, messages: ReceivedRequest)
-    where
-        RQ: SessionBased,
-        WP: WorkPartitioner<RQ>,
-    {
-        match messages {
-            ReceivedRequest::PrePrepareRequestReceived(sender, messages) => {
-                let mut separated_vecs: Vec<Vec<ClientRqInfo>> =
-                    self.init_worker_separated_vec(|| Vec::with_capacity(messages.len()));
-
-                for recvd_rq in messages {
-                    let worker =
-                        WP::get_worker_for_processed(&recvd_rq, self.worker_count as usize);
-
-                    separated_vecs[worker].push(recvd_rq);
-                }
-
-                for (work, worker) in iter::zip(separated_vecs, &self.worker_channel) {
-                    let work_msg = TimeoutWorkerMessage::MessagesReceived(
-                        ReceivedRequest::PrePrepareRequestReceived(sender, work),
-                    );
-
-                    worker
-                        .send_return(work_msg)
-                        .expect("Failed to send worker message");
-                }
-            }
-            ReceivedRequest::Cst(sender, seq) => {
-                self.worker_channel[0]
-                    .send_return(TimeoutWorkerMessage::MessagesReceived(
-                        ReceivedRequest::Cst(sender, seq),
-                    ))
-                    .expect("Failed to send worker message");
-            }
-            ReceivedRequest::LT(sender, seq) => {
-                self.worker_channel[0]
-                    .send_return(TimeoutWorkerMessage::MessagesReceived(ReceivedRequest::LT(
-                        sender, seq,
-                    )))
-                    .expect("Failed to send worker message");
-            }
-            ReceivedRequest::Reconfiguration(sender, seq) => {
-                self.worker_channel[0]
-                    .send_return(TimeoutWorkerMessage::MessagesReceived(
-                        ReceivedRequest::Reconfiguration(sender, seq),
-                    ))
-                    .expect("Failed to send worker message");
-            }
-        }
-    }
-
-    fn handle_clear_client_timeouts(&self, clear_timeouts: Option<Vec<ClientRqInfo>>)
-    where
-        RQ: SessionBased,
-        WP: WorkPartitioner<RQ>,
-    {
-        let mut separated_vecs = if clear_timeouts.is_some() {
-            let vec_length = clear_timeouts.as_ref().map(|t| t.len()).unwrap();
-
-            self.init_worker_separated_vec(|| Some(Vec::with_capacity(vec_length)))
-        } else {
-            iter::repeat(None)
-                .take(self.worker_count as usize)
-                .collect()
-        };
-
-        if let Some(timeouts) = clear_timeouts {
-            for rq in timeouts {
-                let worker = WP::get_worker_for_processed(&rq, self.worker_count as usize);
-
-                separated_vecs[worker].as_mut().unwrap().push(rq);
-            }
-        }
-
-        for (work, worker) in iter::zip(separated_vecs, &self.worker_channel) {
-            worker
-                .send_return(TimeoutWorkerMessage::ClearClientTimeouts(work))
-                .expect("Failed to send worker message");
-        }
-    }
-
-    fn init_worker_separated_vec<T, F>(&self, capacity: F) -> Vec<T>
-    where
-        F: FnMut() -> T,
-    {
-        iter::repeat_with(capacity)
-            .take(self.worker_count as usize)
-            .collect()
-    }
-}
-
-impl PartialEq for TimeoutKind {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::ClientRequestTimeout(client_1), Self::ClientRequestTimeout(client_2)) => {
-                client_1 == client_2
-            }
-            (Self::Cst(seq_no_1), Self::Cst(seq_no_2)) => seq_no_1 == seq_no_2,
-            (Self::LogTransfer(seq_no_1), Self::LogTransfer(seq_no_2)) => seq_no_1 == seq_no_2,
-            (_, _) => false,
-        }
-    }
-}
-
-impl RqTimeout {
-    pub fn timeout_kind(&self) -> &TimeoutKind {
-        &self.timeout_kind
-    }
-
-    pub fn into_timeout_kind(self) -> TimeoutKind {
-        self.timeout_kind
-    }
-
-    pub fn timeout_phase(&self) -> &TimeoutPhase {
-        &self.timeout_phase
-    }
-}
-
-impl TimeoutPhase {
-    #![allow(unreachable_patterns)]
-
-    fn timeout_count(&self) -> usize {
-        match self {
-            Self::TimedOut(times, _) => *times,
-            _ => 0,
-        }
-    }
-
-    fn timeout_instant(&self) -> Instant {
-        match self {
-            Self::TimedOut(_, instant) => *instant,
-            _ => unreachable!(),
-        }
-    }
-}
-
-fn launch_orchestrator_thread<WP, RQ>(
-    worker_count: u32,
-    node_id: NodeId,
-    timeout_dur: Duration,
-    loopback: ChannelSyncTx<Message>,
-) -> Timeouts
+pub fn initialize_timeouts<WR>(
+    our_id: NodeId,
+    num_workers: usize,
+    channel_size: usize,
+    timeout_output: WR,
+) -> TimeoutsHandle
 where
-    RQ: SessionBased + 'static,
-    WP: WorkPartitioner<RQ> + 'static,
+    WR: TimeoutWorkerResponder + 'static,
 {
-    let (tx, rx) = channel::new_bounded_sync(CHANNEL_SIZE, Some("Timeout Orchestrator Thread"));
+    let mut handles = Vec::with_capacity(num_workers);
 
-    let mut workers = Vec::with_capacity(worker_count as usize);
+    for worker in 0..num_workers {
+        let (tx, rx) = new_bounded_sync(
+            channel_size,
+            Some(format!("TimeoutWorker Thread {}", worker)),
+        );
 
-    for i in 0..worker_count {
-        let worker = TimeoutWorker::start_worker(i, node_id, timeout_dur, loopback.clone());
+        worker::initialize_worker_thread(our_id, worker, rx, timeout_output.clone());
 
-        workers.push(worker);
+        handles.push(tx)
     }
 
-    let orchestrator: TimeoutOrchestrator<WP, RQ> =
-        TimeoutOrchestrator::new(worker_count, rx, workers);
+    TimeoutsHandle {
+        worker_handles: handles,
+    }
+}
 
-    std::thread::Builder::new()
-        .name("Timeout-Orchestrator".to_string())
-        .spawn(move || orchestrator.run())
-        .expect("Failed to launch timeout orchestrator thread");
+impl TimeoutsHandle {
+    fn worker_for_timeout(
+        &self,
+        timeout_id: &TimeoutIdentification,
+    ) -> &ChannelSyncTx<WorkerMessage> {
+        &self.worker_handles[self.worker_id_for_timeout(timeout_id)]
+    }
 
-    Timeouts { handle: tx }
+    fn worker_id_for_timeout(&self, timeout_id: &TimeoutIdentification) -> usize {
+        match timeout_id.timeout_id {
+            TimeoutID::SeqNoBased(_) => 0,
+            TimeoutID::SessionBased { session, from, .. } => {
+                operation_key_raw(from, session) as usize % self.worker_handles.len()
+            }
+        }
+    }
+
+    pub fn gen_mod_handle_with_name(&self, mod_name: Arc<str>) -> TimeoutModHandle {
+        TimeoutModHandle::from_name(mod_name, self.clone())
+    }
+
+    pub fn gen_mod_handle_for<M, R>(&self) -> TimeoutModHandle
+    where
+        M: TimeoutableMod<R>,
+    {
+        TimeoutModHandle::from_timeout_mod::<M, R>(self.clone())
+    }
+
+    pub fn request_timeout(
+        &self,
+        timeout_id: TimeoutIdentification,
+        extra_info: Option<Box<dyn TimeOutable>>,
+        duration: Duration,
+        needed_acks: usize,
+        cumulative: bool,
+    ) -> atlas_common::error::Result<()> {
+        self.worker_for_timeout(&timeout_id)
+            .send(WorkerMessage::Request(TimeoutRequest {
+                id: timeout_id,
+                duration,
+                needed_acks,
+                is_cumulative: cumulative,
+                extra_info,
+            }))
+    }
+
+    pub fn request_timeouts(
+        &self,
+        timeout_id: Vec<(TimeoutIdentification, Option<Box<dyn TimeOutable>>)>,
+        duration: Duration,
+        needed_acks: usize,
+        cumulative: bool,
+    ) -> atlas_common::error::Result<()> {
+        timeout_id
+            .into_iter()
+            .map(|(id, extra_info)| TimeoutRequest {
+                id,
+                duration,
+                needed_acks,
+                is_cumulative: cumulative,
+                extra_info,
+            })
+            .group_by(|rq| self.worker_id_for_timeout(rq.id()))
+            .into_iter()
+            .try_for_each(|(worker_id, group)| {
+                self.worker_handles[worker_id].send(WorkerMessage::Requests(group.collect()))
+            })
+    }
+
+    pub fn ack_received(
+        &self,
+        timeout_id: TimeoutIdentification,
+        from: NodeId,
+    ) -> atlas_common::error::Result<()> {
+        self.worker_for_timeout(&timeout_id)
+            .send(WorkerMessage::Ack(TimeoutAck {
+                id: timeout_id,
+                from,
+            }))
+    }
+
+    pub fn acks_received(
+        &self,
+        acks: Vec<(TimeoutIdentification, NodeId)>,
+    ) -> atlas_common::error::Result<()> {
+        acks.into_iter()
+            .map(|(id, from)| TimeoutAck { id, from })
+            .group_by(|ack| self.worker_id_for_timeout(ack.id()))
+            .into_iter()
+            .try_for_each(|(worker_id, group)| {
+                self.worker_handles[worker_id].send(WorkerMessage::Acks(group.collect()))
+            })
+    }
+
+    pub fn cancel_timeout(
+        &self,
+        timeout: TimeoutIdentification,
+    ) -> atlas_common::error::Result<()> {
+        self.worker_for_timeout(&timeout)
+            .send(WorkerMessage::Cancel(timeout))
+    }
+    
+    pub fn cancel_timeouts(&self,
+        timeouts: Vec<TimeoutIdentification>,
+    ) -> atlas_common::error::Result<()> {
+        timeouts
+            .into_iter()
+            .group_by(|timeout| self.worker_id_for_timeout(timeout))
+            .into_iter()
+            .try_for_each(|(worker_id, group)| {
+                self.worker_handles[worker_id].send(WorkerMessage::CancelMultiple(group.collect()))
+            })
+    }
+
+    pub fn cancel_all_timeouts_for_mod(
+        &self,
+        mod_name: Arc<str>,
+    ) -> atlas_common::error::Result<()> {
+        self.worker_handles
+            .iter()
+            .try_for_each(|worker| worker.send(WorkerMessage::CancelAll(mod_name.clone())))
+    }
+}
+
+impl PartialOrd for TimeoutID {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TimeoutID {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (TimeoutID::SeqNoBased(a), TimeoutID::SeqNoBased(b)) => a.cmp(b),
+            (
+                TimeoutID::SessionBased {
+                    session: session_1,
+                    seq_no: seq_1,
+                    from: from_1,
+                },
+                TimeoutID::SessionBased {
+                    session: session_2,
+                    seq_no: seq_2,
+                    from: from_2,
+                },
+            ) => match from_1.cmp(from_2) {
+                Ordering::Equal => match session_1.cmp(session_2) {
+                    Ordering::Equal => seq_1.cmp(seq_2),
+                    other => other,
+                },
+                other => other,
+            },
+            (TimeoutID::SeqNoBased(_), TimeoutID::SessionBased { .. }) => Ordering::Less,
+            (TimeoutID::SessionBased { .. }, TimeoutID::SeqNoBased(_)) => Ordering::Greater,
+        }
+    }
+}
+
+/// The trait detailing the worker behaviour we require
+pub trait TimeoutWorkerResponder: Send + Clone {
+    /// Report a timeout to the rest of the system
+    fn report_timeouts(&self, timeouts: Vec<Timeout>) -> atlas_common::error::Result<()>;
+}
+
+impl TimeoutRequest {
+    pub fn extra_info(&self) -> Option<&dyn TimeOutable> {
+        self.extra_info.as_deref()
+    }
+}
+
+impl Timeout {
+    pub fn extra_info(&self) -> Option<&dyn TimeOutable> {
+        self.extra_info.as_deref()
+    }
+}
+
+impl TimeoutIdentification {
+    pub fn new(mod_name: Arc<str>, seq: SeqNo) -> Self {
+        Self {
+            mod_id: mod_name,
+            timeout_id: TimeoutID::SeqNoBased(seq),
+        }
+    }
+
+    pub fn new_session_based(mod_name: Arc<str>, session: SeqNo, seq: SeqNo, from: NodeId) -> Self {
+        Self {
+            mod_id: mod_name,
+            timeout_id: TimeoutID::SessionBased {
+                session,
+                seq_no: seq,
+                from,
+            },
+        }
+    }
+
+    pub fn new_from_id(mod_name: Arc<str>, id: TimeoutID) -> Self {
+        Self {
+            mod_id: mod_name,
+            timeout_id: id,
+        }
+    }
 }

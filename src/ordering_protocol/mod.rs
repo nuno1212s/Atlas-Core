@@ -27,7 +27,8 @@ use crate::ordering_protocol::networking::serialize::{
     OrderingProtocolMessage, PermissionedOrderingProtocolMessage,
 };
 use crate::request_pre_processing::{BatchOutput, RequestPreProcessor};
-use crate::timeouts::{RqTimeout, Timeouts};
+use crate::timeouts::timeout::{TimeoutModHandle, TimeoutableMod};
+use crate::timeouts::{Timeout, TimeoutsHandle};
 
 pub mod loggable;
 pub mod networking;
@@ -45,7 +46,7 @@ pub type DecisionMetadata<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProofMe
 
 pub struct OrderingProtocolArgs<R, NT>(
     pub NodeId,
-    pub Timeouts,
+    pub TimeoutModHandle,
     pub RequestPreProcessor<R>,
     pub BatchOutput<R>,
     pub Arc<NT>,
@@ -76,7 +77,8 @@ pub type OPExResult<RQ, SER> =
 ///
 /// The generic type presented here is the type of the request that the ordering protocol will be ordering
 /// This can be whatever the developer wants, as long as it implements the [SerType] trait
-pub trait OrderingProtocol<RQ>: OrderProtocolTolerance + Orderable
+pub trait OrderingProtocol<RQ>:
+    OrderProtocolTolerance + Orderable + TimeoutableMod<OPExResult<RQ, Self::Serialization>>
 where
     RQ: SerType,
 {
@@ -85,11 +87,6 @@ where
 
     /// The configuration type the protocol wants to accept
     type Config;
-
-    /// Initialize this ordering protocol with the given configuration, executor, timeouts and node
-    /*fn initialize<NT>(config: Self::Config, args: OrderingProtocolArgs<RQ, NT>) -> Result<Self>
-    where Self: Sized,
-          NT: OrderProtocolSendNode<RQ, Self::Serialization>;*/
 
     /// Handle a protocol message that was received while we are executing another protocol
     fn handle_off_ctx_message(
@@ -115,12 +112,6 @@ where
 
     /// Install a given sequence number
     fn install_seq_no(&mut self, seq_no: SeqNo) -> Result<()>;
-
-    /// Handle a timeout received from the timeouts layer
-    fn handle_timeout(
-        &mut self,
-        timeout: Vec<RqTimeout>,
-    ) -> Result<OPExResult<RQ, Self::Serialization>>;
 }
 
 /// A permissioned ordering protocol, meaning only a select few are actually part of the quorum that decides the

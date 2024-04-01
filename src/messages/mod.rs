@@ -5,12 +5,11 @@ use std::ops::Deref;
 #[cfg(feature = "serialize_serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::timeouts::{TimeOutable};
 use atlas_common::crypto::hash::Digest;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
 use atlas_communication::message::StoredMessage;
-
-use crate::timeouts::TimedOut;
 
 pub type StoredRequestMessage<O> = StoredMessage<RequestMessage<O>>;
 
@@ -126,29 +125,6 @@ impl<P> ReplyMessage<P> {
     }
 }
 
-/// The `Message` type encompasses all the messages traded between different
-/// asynchronous tasks in the system.
-///
-pub enum Message {
-    /// We received a timeout from the timeouts layer.
-    Timeout(TimedOut),
-    /// Timeouts that have already been processed by the request pre processing layer.
-    ProcessedTimeout(TimedOut, TimedOut),
-}
-
-impl Debug for Message {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Message::Timeout(_) => {
-                write!(f, "timeout")
-            }
-            Message::ProcessedTimeout(_, _) => {
-                write!(f, "Digested Timeouts")
-            }
-        }
-    }
-}
-
 /// The client request information about a given request
 #[derive(Eq, PartialEq, Ord, Clone, PartialOrd, Debug)]
 pub struct ClientRqInfo {
@@ -159,6 +135,16 @@ pub struct ClientRqInfo {
     pub sender: NodeId,
     pub seq_no: SeqNo,
     pub session: SeqNo,
+}
+
+impl TimeOutable for ClientRqInfo {
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        self
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// A wrapper for protocol messages

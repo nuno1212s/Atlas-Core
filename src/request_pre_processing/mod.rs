@@ -3,7 +3,8 @@ use crate::metric::{
     RQ_PP_CLONE_PENDING_TIME_ID, RQ_PP_COLLECT_PENDING_TIME_ID,
     RQ_PP_WORKER_PROPOSER_PASSING_TIME_ID,
 };
-use crate::timeouts::RqTimeout;
+use crate::timeouts::timeout::ModTimeout;
+use crate::timeouts::Timeout;
 use atlas_common::channel;
 use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx, OneShotTx, RecvError, TryRecvError};
 use atlas_common::node_id::NodeId;
@@ -21,15 +22,16 @@ pub mod work_dividers;
 /// This should sign a contract to maintain all client sessions in the same worker, never changing
 /// A session is defined by the client ID and the session ID.
 ///
-pub trait WorkPartitioner<O>: Send
-where
-    O: SessionBased,
-{
+pub trait WorkPartitioner: Send {
     /// Get the worker that should process this request
-    fn get_worker_for(rq_info: &Header, message: &O, worker_count: usize) -> usize;
+    fn get_worker_for<O>(rq_info: &Header, message: &O, worker_count: usize) -> usize
+    where
+        O: SessionBased;
 
     /// Get the worker that should process this request
     fn get_worker_for_processed(rq_info: &ClientRqInfo, worker_count: usize) -> usize;
+
+    fn get_worker_for_raw(from: NodeId, session: SeqNo, worker_count: usize) -> usize;
 }
 
 pub type PreProcessorOutput<O> = (PreProcessorOutputMessage<O>, Instant);
@@ -45,8 +47,8 @@ pub enum PreProcessorMessage<O> {
     StoppedRequests(Vec<StoredMessage<O>>),
     /// Analyse timeout requests. Returns only timeouts that have not yet been executed
     TimeoutsReceived(
-        Vec<RqTimeout>,
-        ChannelSyncTx<(Vec<RqTimeout>, Vec<RqTimeout>)>,
+        Vec<ModTimeout>,
+        ChannelSyncTx<(Vec<ModTimeout>, Vec<ModTimeout>)>,
     ),
     /// A batch of requests that has been decided by the system
     DecidedBatch(Vec<ClientRqInfo>),
@@ -131,8 +133,8 @@ impl<O> RequestPreProcessor<O> {
 
     pub fn process_timeouts(
         &self,
-        timeouts: Vec<RqTimeout>,
-        response: ChannelSyncTx<(Vec<RqTimeout>, Vec<RqTimeout>)>,
+        timeouts: Vec<ModTimeout>,
+        response: ChannelSyncTx<(Vec<ModTimeout>, Vec<ModTimeout>)>,
     ) {
         self.0
             .send_return(PreProcessorMessage::TimeoutsReceived(timeouts, response))
