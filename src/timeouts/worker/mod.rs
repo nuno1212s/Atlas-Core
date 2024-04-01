@@ -11,7 +11,7 @@ use std::time::{Duration, SystemTime, SystemTimeError};
 
 use thiserror::Error;
 
-use atlas_common::channel::ChannelSyncRx;
+use atlas_common::channel::{ChannelSyncRx, TryRecvError};
 use atlas_common::collections::HashMap;
 use atlas_common::node_id::NodeId;
 
@@ -109,7 +109,10 @@ where
                     self.process_message(message)?;
                 }
                 Err(e) => {
-                    error!("Error receiving message: {:?}", e);
+                    if let TryRecvError::Timeout = e {
+                    } else {
+                        error!("Error receiving message: {:?}", e);
+                    }
                 }
             }
 
