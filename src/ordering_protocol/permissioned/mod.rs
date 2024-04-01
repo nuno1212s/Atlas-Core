@@ -7,7 +7,7 @@ use atlas_communication::message::StoredMessage;
 use crate::ordering_protocol::networking::serialize::ViewTransferProtocolMessage;
 use crate::ordering_protocol::networking::ViewTransferProtocolSendNode;
 use crate::ordering_protocol::PermissionedOrderingProtocol;
-use crate::timeouts::RqTimeout;
+use crate::timeouts::timeout::{TimeoutModHandle, TimeoutableMod};
 
 /// The result of processing a message with the view transfer protocol
 pub enum VTResult {
@@ -43,7 +43,7 @@ pub type VTMsg<VT> = <VT as ViewTransferProtocolMessage>::ProtocolMessage;
 /// the protocol from the currently available replicas
 /// The view change protocol (if applicable) is to be implemented by the
 /// [OrderingProtocol]
-pub trait ViewTransferProtocol<OP> {
+pub trait ViewTransferProtocol<OP>: TimeoutableMod<VTTimeoutResult> {
     type Serialization: ViewTransferProtocolMessage + 'static;
 
     type Config;
@@ -72,11 +72,6 @@ pub trait ViewTransferProtocol<OP> {
     ) -> Result<VTResult>
     where
         OP: PermissionedOrderingProtocol;
-
-    /// Handle a timeout
-    fn handle_timeout(&mut self, timeout: Vec<RqTimeout>) -> Result<VTTimeoutResult>
-    where
-        OP: PermissionedOrderingProtocol;
 }
 
 pub trait ViewTransferProtocolInitializer<OP, NT>: ViewTransferProtocol<OP> {
@@ -85,6 +80,7 @@ pub trait ViewTransferProtocolInitializer<OP, NT>: ViewTransferProtocol<OP> {
         config: Self::Config,
         net: Arc<NT>,
         view: Vec<NodeId>,
+        timeout_handle: TimeoutModHandle,
     ) -> Result<Self>
     where
         NT: ViewTransferProtocolSendNode<Self::Serialization>,

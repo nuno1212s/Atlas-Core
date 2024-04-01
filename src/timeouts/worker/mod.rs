@@ -1,9 +1,12 @@
+#![allow(dead_code)]
+
 use getset::{CopyGetters, Getters};
 use log::error;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Add;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, SystemTimeError};
 
 use thiserror::Error;
@@ -12,7 +15,7 @@ use atlas_common::channel::ChannelSyncRx;
 use atlas_common::collections::HashMap;
 use atlas_common::node_id::NodeId;
 
-use crate::timeouts_v2::{
+use crate::timeouts::{
     Timeout, TimeoutAck, TimeoutIdentification, TimeoutRequest, TimeoutWorkerResponder,
 };
 
@@ -21,6 +24,9 @@ pub(super) enum WorkerMessage {
     Requests(Vec<TimeoutRequest>),
     Ack(TimeoutAck),
     Acks(Vec<TimeoutAck>),
+    Cancel(TimeoutIdentification),
+    CancelMultiple(Vec<TimeoutIdentification>),
+    CancelAll(Arc<str>),
 }
 
 enum TimeoutPhase {
@@ -80,7 +86,7 @@ pub(super) fn initialize_worker_thread<WR>(
                 pending_timeout_heap: Default::default(),
                 timeout_notifier: notifier,
             };
-            
+
             loop {
                 if let Err(err) = worker.run() {
                     error!("Timeout worker error: {:?}", err);
@@ -100,7 +106,7 @@ where
         loop {
             match self.work_rx_channel.recv_timeout(duration) {
                 Ok(message) => {
-                   self.process_message(message)?;
+                    self.process_message(message)?;
                 }
                 Err(e) => {
                     error!("Error receiving message: {:?}", e);
@@ -110,7 +116,7 @@ where
             self.process_timeouts()?;
         }
     }
-    
+
     fn process_message(
         &mut self,
         message: WorkerMessage,
@@ -130,6 +136,15 @@ where
             WorkerMessage::Acks(acks) => {
                 acks.into_iter()
                     .try_for_each(|ack| self.handle_timeout_ack(ack))?;
+            }
+            WorkerMessage::Cancel(timeout_id) => {
+                self.remove_time_out(&timeout_id);
+            }
+            WorkerMessage::CancelMultiple(timeout_ids) => {
+                timeout_ids.into_iter().for_each(|id| self.remove_time_out(&id));
+            }
+            WorkerMessage::CancelAll(module_name) => {
+                self.cancel_all_rqs_for_mod(module_name)?;
             }
         }
 
@@ -211,9 +226,6 @@ where
             .as_millis() as u64;
 
         let mut timeouts = Vec::new();
-        
-        println!("Timeouts: {:?}", self.pending_timeout_heap.keys());
-        println!("Now: {:?}", now);
 
         while let Some((timeout, _)) = self.pending_timeout_heap.first_key_value() {
             if *timeout > now {
@@ -222,9 +234,7 @@ where
 
             let (_, requests) = self.pending_timeout_heap.pop_first().unwrap();
 
-            requests
-                .iter()
-                .for_each(|mut rq| rq.borrow_mut().timed_out());
+            requests.iter().for_each(|rq| rq.borrow_mut().timed_out());
 
             let (cumulative_stream, non_cumulative_stream): (Vec<_>, Vec<_>) = requests
                 .iter()
@@ -266,6 +276,16 @@ where
         if !timeouts.is_empty() {
             self.timeout_notifier.report_timeouts(timeouts)?;
         }
+
+        Ok(())
+    }
+
+    fn cancel_all_rqs_for_mod(
+        &mut self,
+        mod_name: Arc<str>,
+    ) -> Result<(), ClearAllOcurrencesError> {
+        self.watched_requests
+            .retain(|k, _v| !Arc::ptr_eq(k.mod_id(), &mod_name));
 
         Ok(())
     }
@@ -330,7 +350,12 @@ pub enum ProcessTimeoutMessageError {
     AckProcessFailed(#[from] AcceptAckError),
     #[error("Failed to process timeout: {0}")]
     TimeoutProcessFailed(#[from] ProcessTimeoutError),
+    #[error("Failed to clear all occurrences {0}")]
+    ClearingAllOccurrences(#[from] ClearAllOcurrencesError),
 }
+
+#[derive(Error, Debug)]
+pub enum ClearAllOcurrencesError {}
 
 #[derive(Error, Debug)]
 pub enum AcceptAckError {

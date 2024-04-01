@@ -1,22 +1,24 @@
-use dyn_clone::DynClone;
+use std::any::Any;
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use dyn_clone::DynClone;
 use getset::{CopyGetters, Getters};
 use itertools::Itertools;
 
-use crate::request_pre_processing::operation_key_raw;
 use atlas_common::channel::{new_bounded_sync, ChannelSyncTx};
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::SeqNo;
 
-use crate::timeouts_v2::worker::WorkerMessage;
+use crate::request_pre_processing::operation_key_raw;
+use crate::timeouts::timeout::{TimeoutModHandle, TimeoutableMod};
+use crate::timeouts::worker::WorkerMessage;
 
 mod tests;
+pub mod timeout;
 mod worker;
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
@@ -29,9 +31,11 @@ pub enum TimeoutID {
     },
 }
 
-#[derive(Hash, Ord, Eq, PartialOrd, PartialEq, Clone, Debug)]
+#[derive(Hash, Ord, Eq, PartialOrd, PartialEq, Clone, Debug, Getters, CopyGetters)]
 pub struct TimeoutIdentification {
+    #[get = "pub"]
     mod_id: Arc<str>,
+    #[get = "pub"]
     timeout_id: TimeoutID,
 }
 
@@ -44,7 +48,6 @@ pub struct Timeout {
     timeout_count: usize,
     #[get_copy = "pub"]
     timeout_time: SystemTime,
-    #[get = "pub"]
     extra_info: Option<Box<dyn TimeOutable>>,
 }
 
@@ -62,9 +65,15 @@ struct TimeoutRequest {
 }
 
 /// A timeout trait, representing the behaviour needed from a timeout request
-pub trait TimeOutable: DynClone + Debug + Send {}
+pub trait TimeOutable: DynClone + Debug + Send {
+    /// Turn a box of this object into a box of dyn Any, so it can be cast
+    fn into_any(self: Box<Self>) -> Box<dyn Any>;
 
-#[derive(Getters, CopyGetters)]
+    /// casting to any trait object
+    fn as_any(&self) -> &dyn Any;
+}
+
+#[derive(Getters, CopyGetters, Debug)]
 struct TimeoutAck {
     #[get = "pub"]
     id: TimeoutIdentification,
@@ -119,6 +128,17 @@ impl TimeoutsHandle {
                 operation_key_raw(from, session) as usize % self.worker_handles.len()
             }
         }
+    }
+
+    pub fn gen_mod_handle_with_name(&self, mod_name: Arc<str>) -> TimeoutModHandle {
+        TimeoutModHandle::from_name(mod_name, self.clone())
+    }
+
+    pub fn gen_mod_handle_for<M, R>(&self) -> TimeoutModHandle
+    where
+        M: TimeoutableMod<R>,
+    {
+        TimeoutModHandle::from_timeout_mod::<M, R>(self.clone())
     }
 
     pub fn request_timeout(
@@ -186,6 +206,35 @@ impl TimeoutsHandle {
                 self.worker_handles[worker_id].send(WorkerMessage::Acks(group.collect()))
             })
     }
+
+    pub fn cancel_timeout(
+        &self,
+        timeout: TimeoutIdentification,
+    ) -> atlas_common::error::Result<()> {
+        self.worker_for_timeout(&timeout)
+            .send(WorkerMessage::Cancel(timeout))
+    }
+    
+    pub fn cancel_timeouts(&self,
+        timeouts: Vec<TimeoutIdentification>,
+    ) -> atlas_common::error::Result<()> {
+        timeouts
+            .into_iter()
+            .group_by(|timeout| self.worker_id_for_timeout(timeout))
+            .into_iter()
+            .try_for_each(|(worker_id, group)| {
+                self.worker_handles[worker_id].send(WorkerMessage::CancelMultiple(group.collect()))
+            })
+    }
+
+    pub fn cancel_all_timeouts_for_mod(
+        &self,
+        mod_name: Arc<str>,
+    ) -> atlas_common::error::Result<()> {
+        self.worker_handles
+            .iter()
+            .try_for_each(|worker| worker.send(WorkerMessage::CancelAll(mod_name.clone())))
+    }
 }
 
 impl PartialOrd for TimeoutID {
@@ -229,7 +278,40 @@ pub trait TimeoutWorkerResponder: Send + Clone {
 }
 
 impl TimeoutRequest {
-    fn extra_info(&self) -> Option<&dyn TimeOutable> {
+    pub fn extra_info(&self) -> Option<&dyn TimeOutable> {
         self.extra_info.as_deref()
+    }
+}
+
+impl Timeout {
+    pub fn extra_info(&self) -> Option<&dyn TimeOutable> {
+        self.extra_info.as_deref()
+    }
+}
+
+impl TimeoutIdentification {
+    pub fn new(mod_name: Arc<str>, seq: SeqNo) -> Self {
+        Self {
+            mod_id: mod_name,
+            timeout_id: TimeoutID::SeqNoBased(seq),
+        }
+    }
+
+    pub fn new_session_based(mod_name: Arc<str>, session: SeqNo, seq: SeqNo, from: NodeId) -> Self {
+        Self {
+            mod_id: mod_name,
+            timeout_id: TimeoutID::SessionBased {
+                session,
+                seq_no: seq,
+                from,
+            },
+        }
+    }
+
+    pub fn new_from_id(mod_name: Arc<str>, id: TimeoutID) -> Self {
+        Self {
+            mod_id: mod_name,
+            timeout_id: id,
+        }
     }
 }

@@ -12,7 +12,8 @@ use atlas_communication::reconfiguration::{
 use atlas_communication::stub::RegularNetworkStub;
 
 use crate::serialize::ReconfigurationProtocolMessage;
-use crate::timeouts::{RqTimeout, Timeouts};
+use crate::timeouts::timeout::{ModTimeout, TimeoutModHandle, TimeoutableMod};
+use crate::timeouts::{Timeout, TimeoutsHandle};
 
 /// Messages to be sent by the reconfiguration protocol
 /// to the ordering protocol relating changes that have undergone in the
@@ -111,7 +112,9 @@ pub enum ReconfigResponse {
 ///
 /// The reconfiguration protocol acts as the network information acquirer, acquiring new nodes,
 /// verifying their integrity and correctness
-pub trait ReconfigurationProtocol: Send + Sync + 'static {
+pub trait ReconfigurationProtocol:
+    TimeoutableMod<ReconfigResponse> + Send + Sync + 'static
+{
     // The configuration type the protocol wants to receive
     type Config;
 
@@ -133,7 +136,7 @@ pub trait ReconfigurationProtocol: Send + Sync + 'static {
     async fn initialize_protocol<NT>(
         information: Arc<Self::InformationProvider>,
         node: Arc<NT>,
-        timeouts: Timeouts,
+        timeouts: TimeoutModHandle,
         node_type: ReconfigurableNodeTypes,
         reconfig: ReconfigurationMessageHandler,
         min_stable_node_count: usize,
@@ -141,9 +144,6 @@ pub trait ReconfigurationProtocol: Send + Sync + 'static {
     where
         NT: RegularNetworkStub<Self::Serialization> + 'static,
         Self: Sized;
-
-    /// Handle a timeout from the timeouts layer
-    fn handle_timeout(&self, timeouts: Vec<RqTimeout>) -> Result<ReconfigResponse>;
 
     /// Get the current quorum members of the system
     fn get_quorum_members(&self) -> Vec<NodeId>;
@@ -156,6 +156,8 @@ pub trait ReconfigurationProtocol: Send + Sync + 'static {
 
     /// Check if a given join certificate is valid
     fn is_join_certificate_valid(&self, certificate: &QuorumJoinCert<Self::Serialization>) -> bool;
+
+    fn handle_timeouts_safe(&self, timeouts: Vec<ModTimeout>) -> Result<ReconfigResponse>;
 }
 
 /// Threshold crypto information about the current network

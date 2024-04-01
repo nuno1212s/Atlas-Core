@@ -13,4 +13,3 @@ pub mod reconfiguration_protocol;
 pub mod request_pre_processing;
 pub mod serialize;
 pub mod timeouts;
-mod timeouts_v2;
