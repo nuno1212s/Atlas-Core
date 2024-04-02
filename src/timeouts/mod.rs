@@ -8,6 +8,7 @@ use std::time::{Duration, SystemTime};
 use dyn_clone::DynClone;
 use getset::{CopyGetters, Getters};
 use itertools::Itertools;
+use tracing::instrument;
 
 use atlas_common::channel::{new_bounded_sync, ChannelSyncTx};
 use atlas_common::node_id::NodeId;
@@ -51,7 +52,7 @@ pub struct Timeout {
     extra_info: Option<Box<dyn TimeOutable>>,
 }
 
-#[derive(CopyGetters, Getters)]
+#[derive(CopyGetters, Getters, Debug)]
 struct TimeoutRequest {
     #[get]
     id: TimeoutIdentification,
@@ -141,6 +142,7 @@ impl TimeoutsHandle {
         TimeoutModHandle::from_timeout_mod::<M, R>(self.clone())
     }
 
+    #[instrument(skip(self), level = "trace")]
     pub fn request_timeout(
         &self,
         timeout_id: TimeoutIdentification,
@@ -159,6 +161,7 @@ impl TimeoutsHandle {
             }))
     }
 
+    #[instrument(skip(self, timeout_id), level = "trace")]
     pub fn request_timeouts(
         &self,
         timeout_id: Vec<(TimeoutIdentification, Option<Box<dyn TimeOutable>>)>,
@@ -182,6 +185,7 @@ impl TimeoutsHandle {
             })
     }
 
+    #[instrument(skip(self), level = "trace")]
     pub fn ack_received(
         &self,
         timeout_id: TimeoutIdentification,
@@ -194,6 +198,7 @@ impl TimeoutsHandle {
             }))
     }
 
+    #[instrument(skip(self, acks), level = "trace", fields(acks = acks.len()))]
     pub fn acks_received(
         &self,
         acks: Vec<(TimeoutIdentification, NodeId)>,
@@ -207,6 +212,7 @@ impl TimeoutsHandle {
             })
     }
 
+    #[instrument(skip(self), level = "trace")]
     pub fn cancel_timeout(
         &self,
         timeout: TimeoutIdentification,
@@ -214,8 +220,10 @@ impl TimeoutsHandle {
         self.worker_for_timeout(&timeout)
             .send(WorkerMessage::Cancel(timeout))
     }
-    
-    pub fn cancel_timeouts(&self,
+
+    #[instrument(skip(self), level = "trace", fields(cancelled_timeouts = timeouts.len()))]
+    pub fn cancel_timeouts(
+        &self,
         timeouts: Vec<TimeoutIdentification>,
     ) -> atlas_common::error::Result<()> {
         timeouts
@@ -227,6 +235,7 @@ impl TimeoutsHandle {
             })
     }
 
+    #[instrument(skip(self), level = "trace")]
     pub fn cancel_all_timeouts_for_mod(
         &self,
         mod_name: Arc<str>,

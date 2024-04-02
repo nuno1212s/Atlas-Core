@@ -5,7 +5,7 @@ use std::ops::Deref;
 #[cfg(feature = "serialize_serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::timeouts::{TimeOutable};
+use crate::timeouts::TimeOutable;
 use atlas_common::crypto::hash::Digest;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};

@@ -1,6 +1,9 @@
 #![allow(type_alias_bounds)]
 
+use std::fmt::{Debug, Formatter};
+use std::ptr::write;
 use std::sync::Arc;
+use tracing::instrument;
 
 use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
 use atlas_common::crypto::threshold_crypto::{PrivateKeyPart, PublicKeyPart, PublicKeySet};
@@ -176,4 +179,17 @@ pub trait QuorumThresholdCrypto: Send + Sync {
     /// then be combined in order to assure at least threshold
     /// nodes signed/encrypted the same piece of information
     fn get_priv_key_part(&self) -> Result<&PrivateKeyPart>;
+}
+
+impl Debug for ReconfigurableNodeTypes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReconfigurableNodeTypes::ClientNode(_) => {
+                write!(f, "Client Node")
+            }
+            ReconfigurableNodeTypes::QuorumNode(_, _) => {
+                write!(f, "Replica Node")
+            }
+        }
+    }
 }

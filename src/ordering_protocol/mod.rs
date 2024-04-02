@@ -10,6 +10,7 @@ use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use tracing::instrument;
 
 use atlas_common::crypto::hash::Digest;
 use atlas_common::error::*;

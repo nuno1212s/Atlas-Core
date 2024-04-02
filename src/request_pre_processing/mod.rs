@@ -4,7 +4,6 @@ use crate::metric::{
     RQ_PP_WORKER_PROPOSER_PASSING_TIME_ID,
 };
 use crate::timeouts::timeout::ModTimeout;
-use crate::timeouts::Timeout;
 use atlas_common::channel;
 use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx, OneShotTx, RecvError, TryRecvError};
 use atlas_common::node_id::NodeId;

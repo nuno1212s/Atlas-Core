@@ -35,7 +35,7 @@ either = "1.10.0"
 itertools = "0"
 
 chrono = "0.4.24"
-log = "0.4.17"
+tracing = "0"
 
 [dev-dependencies]
 lazy_static = "1"

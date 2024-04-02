@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use getset::{CopyGetters, Getters};
-use log::error;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Add;
@@ -10,6 +9,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, SystemTimeError};
 
 use thiserror::Error;
+use tracing::error;
+use tracing::instrument;
 
 use atlas_common::channel::{ChannelSyncRx, TryRecvError};
 use atlas_common::collections::HashMap;
@@ -19,6 +20,7 @@ use crate::timeouts::{
     Timeout, TimeoutAck, TimeoutIdentification, TimeoutRequest, TimeoutWorkerResponder,
 };
 
+#[derive(Debug)]
 pub(super) enum WorkerMessage {
     Request(TimeoutRequest),
     Requests(Vec<TimeoutRequest>),
@@ -120,6 +122,7 @@ where
         }
     }
 
+    #[instrument(skip(self))]
     fn process_message(
         &mut self,
         message: WorkerMessage,
@@ -144,7 +147,9 @@ where
                 self.remove_time_out(&timeout_id);
             }
             WorkerMessage::CancelMultiple(timeout_ids) => {
-                timeout_ids.into_iter().for_each(|id| self.remove_time_out(&id));
+                timeout_ids
+                    .into_iter()
+                    .for_each(|id| self.remove_time_out(&id));
             }
             WorkerMessage::CancelAll(module_name) => {
                 self.cancel_all_rqs_for_mod(module_name)?;
@@ -221,6 +226,7 @@ where
         }
     }
 
+    #[instrument(skip(self))]
     fn process_timeouts(&mut self) -> Result<(), TimeoutError> {
         let current_sys_time = SystemTime::now();
 
@@ -289,6 +295,10 @@ where
     ) -> Result<(), ClearAllOcurrencesError> {
         self.watched_requests
             .retain(|k, _v| !Arc::ptr_eq(k.mod_id(), &mod_name));
+
+        self.pending_timeout_heap.iter_mut().for_each(|(_, v)| {
+            v.retain(|rq| !Arc::ptr_eq(rq.borrow().request().id().mod_id(), &mod_name))
+        });
 
         Ok(())
     }
