@@ -10,7 +10,6 @@ use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use tracing::instrument;
 
 use atlas_common::crypto::hash::Digest;
 use atlas_common::error::*;
@@ -29,7 +28,6 @@ use crate::ordering_protocol::networking::serialize::{
 };
 use crate::request_pre_processing::{BatchOutput, RequestPreProcessor};
 use crate::timeouts::timeout::{TimeoutModHandle, TimeoutableMod};
-use crate::timeouts::{Timeout, TimeoutsHandle};
 
 pub mod loggable;
 pub mod networking;
@@ -453,8 +451,8 @@ where
 impl<MD, P, O> PartialEq<Self> for DecisionInfo<MD, P, O> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (DecisionInfo::DecisionMetadata(md), DecisionInfo::DecisionMetadata(md2)) => true,
-            (DecisionInfo::DecisionDone(prot), DecisionInfo::DecisionDone(prot2)) => true,
+            (DecisionInfo::DecisionMetadata(_md), DecisionInfo::DecisionMetadata(_md2)) => true,
+            (DecisionInfo::DecisionDone(_prot), DecisionInfo::DecisionDone(_prot2)) => true,
             (
                 DecisionInfo::PartialDecisionInformation(info),
                 DecisionInfo::PartialDecisionInformation(info2),

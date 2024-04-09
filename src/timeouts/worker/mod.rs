@@ -99,8 +99,8 @@ pub(super) fn initialize_worker_thread<WR>(
 }
 
 impl<WR> TimeoutWorker<WR>
-where
-    WR: TimeoutWorkerResponder,
+    where
+        WR: TimeoutWorkerResponder,
 {
     fn run(&mut self) -> Result<(), TimeoutError> {
         let duration = Duration::from_millis(1);
@@ -111,8 +111,7 @@ where
                     self.process_message(message)?;
                 }
                 Err(e) => {
-                    if let TryRecvError::Timeout = e {
-                    } else {
+                    if let TryRecvError::Timeout = e {} else {
                         error!("Error receiving message: {:?}", e);
                     }
                 }
@@ -216,13 +215,24 @@ where
         Ok(())
     }
 
+    #[instrument(skip(self))]
     fn remove_time_out(&mut self, timeout_id: &TimeoutIdentification) {
         if let Some(watched) = self.watched_requests.remove(timeout_id) {
             let timeout_time = watched.borrow().timeout_time();
 
             if let Some(vec) = self.pending_timeout_heap.get_mut(&timeout_time) {
-                vec.retain(|rq| !Rc::ptr_eq(rq, &watched))
+                let removed_position = vec.iter()
+                    .position(|rq| Rc::ptr_eq(rq, &watched))
+                    .map(|pos| vec.swap_remove(pos));
+                
+                if removed_position.is_none() {
+                    error!("Failed to remove timeout from heap {:?}", timeout_id);
+                };
+            } else {
+                error!("Removed timeout that was no longer in the pending timeout heap? {:?}", timeout_id);
             }
+        } else {
+            error!("Provided timeout that is not currently being tracked {:?}", timeout_id);
         }
     }
 

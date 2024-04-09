@@ -4,6 +4,7 @@ mod timeouts_test {
     use lazy_static::lazy_static;
     use std::sync::Arc;
     use std::time::Duration;
+    use tracing_appender::non_blocking::WorkerGuard;
 
     use atlas_common::channel::{new_bounded_sync, ChannelSyncRx, ChannelSyncTx};
     use atlas_common::node_id::NodeId;
@@ -29,6 +30,16 @@ mod timeouts_test {
             },
         },];
     }
+    
+    fn setup_tracing_subscriber() -> WorkerGuard {
+        let (console_nb, guard_3) = tracing_appender::non_blocking(std::io::stdout());
+        
+        tracing_subscriber::fmt::fmt()
+            .with_writer(console_nb)
+            .init();
+    
+        guard_3
+    }
 
     #[derive(Clone)]
     struct TimeoutTx {
@@ -46,12 +57,14 @@ mod timeouts_test {
         (TimeoutTx { tx }, rx)
     }
 
-    fn setup_timeouts() -> (TimeoutsHandle, ChannelSyncRx<Vec<Timeout>>) {
+    fn setup_timeouts() -> (TimeoutsHandle, ChannelSyncRx<Vec<Timeout>>, WorkerGuard) {
+        let guard = setup_tracing_subscriber();
+        
         let (tx, rx) = init_timeout_rx();
 
         let handle = initialize_timeouts(OUR_ID, 1, 10, tx);
 
-        (handle, rx)
+        (handle, rx, guard)
     }
 
     fn start_timeout_with(
@@ -78,10 +91,14 @@ mod timeouts_test {
     fn ack_timeout(timeout_id: TimeoutIdentification, from: NodeId, handle: &TimeoutsHandle) {
         handle.ack_received(timeout_id, from).unwrap();
     }
+    
+    fn cancel_timeout(timeout_id: TimeoutIdentification, handle: &TimeoutsHandle) {
+        handle.cancel_timeout(timeout_id).unwrap();
+    }
 
     #[test]
     fn test_timeout_session_based() {
-        let (handle, timeout_rx) = setup_timeouts();
+        let (handle, timeout_rx, _) = setup_timeouts();
 
         start_timeout(TIMEOUT_IDS[0].clone(), &handle);
 
@@ -94,7 +111,7 @@ mod timeouts_test {
 
     #[test]
     fn test_timeout_ack() {
-        let (handle, timeout_rx) = setup_timeouts();
+        let (handle, timeout_rx, _) = setup_timeouts();
 
         start_timeout(TIMEOUT_IDS[0].clone(), &handle);
 
@@ -109,7 +126,7 @@ mod timeouts_test {
 
     #[test]
     fn test_multiple_ack_not_received() {
-        let (handle, timeout_rx) = setup_timeouts();
+        let (handle, timeout_rx, _) = setup_timeouts();
 
         start_timeout_with(&handle, TIMEOUT_IDS[0].clone(), 2, false);
 
@@ -123,7 +140,7 @@ mod timeouts_test {
 
     #[test]
     fn test_multiple_acks_received() {
-        let (handle, timeout_rx) = setup_timeouts();
+        let (handle, timeout_rx, _) = setup_timeouts();
 
         let acks = 2;
 
@@ -142,7 +159,7 @@ mod timeouts_test {
 
     #[test]
     fn test_duplicate_acks() {
-        let (handle, timeout_rx) = setup_timeouts();
+        let (handle, timeout_rx, _) = setup_timeouts();
 
         let acks = 2;
 
@@ -160,7 +177,7 @@ mod timeouts_test {
 
     #[test]
     fn test_cumulative_timeouts() {
-        let (handle, timeout_rx) = setup_timeouts();
+        let (handle, timeout_rx, _) = setup_timeouts();
 
         start_timeout_with(&handle, TIMEOUT_IDS[0].clone(), 1, true);
 
@@ -175,7 +192,7 @@ mod timeouts_test {
 
     #[test]
     fn test_cumulative_timeouts_ack() {
-        let (handle, timeout_rx) = setup_timeouts();
+        let (handle, timeout_rx, _) = setup_timeouts();
 
         start_timeout_with(&handle, TIMEOUT_IDS[0].clone(), 1, true);
 
@@ -187,6 +204,22 @@ mod timeouts_test {
         assert_eq!(timeouts[0].timeout_count, 1);
 
         ack_timeout(TIMEOUT_IDS[0].clone(), OUR_ID, &handle);
+
+        std::thread::sleep(Duration::from_secs(2));
+
+        let timeouts = timeout_rx.try_recv();
+
+        assert!(timeouts.is_err());
+    }
+    
+    #[test]
+    fn test_timeout_cancel() {
+
+        let (handle, timeout_rx, _) = setup_timeouts();
+
+        start_timeout(TIMEOUT_IDS[0].clone(), &handle);
+
+        cancel_timeout(TIMEOUT_IDS[0].clone(), &handle);
 
         std::thread::sleep(Duration::from_secs(2));
 
