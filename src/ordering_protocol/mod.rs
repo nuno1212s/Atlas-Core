@@ -26,7 +26,7 @@ use crate::messages::ClientRqInfo;
 use crate::ordering_protocol::networking::serialize::{
     OrderingProtocolMessage, PermissionedOrderingProtocolMessage,
 };
-use crate::request_pre_processing::{BatchOutput, RequestPreProcessor};
+use crate::request_pre_processing::{BatchOutput};
 use crate::timeouts::timeout::{TimeoutModHandle, TimeoutableMod};
 
 pub mod loggable;
@@ -43,10 +43,10 @@ pub type ShareableMessage<P> = Arc<ReadOnly<StoredMessage<P>>>;
 pub type ProtocolMessage<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProtocolMessage;
 pub type DecisionMetadata<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProofMetadata;
 
-pub struct OrderingProtocolArgs<R, NT>(
+pub struct OrderingProtocolArgs<R, RP, NT>(
     pub NodeId,
     pub TimeoutModHandle,
-    pub RequestPreProcessor<R>,
+    pub RP,
     pub BatchOutput<R>,
     pub Arc<NT>,
     pub Vec<NodeId>,

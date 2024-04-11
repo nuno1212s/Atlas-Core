@@ -22,9 +22,9 @@ pub trait NetworkedOrderProtocolInitializer<RQ, NT>: OrderingProtocol<RQ>
 where
     RQ: SerType,
 {
-    fn initialize(
+    fn initialize<RP>(
         config: Self::Config,
-        ordering_protocol_args: OrderingProtocolArgs<RQ, NT>,
+        ordering_protocol_args: OrderingProtocolArgs<RQ, RP, NT>,
     ) -> Result<Self>
     where
         Self: Sized;
