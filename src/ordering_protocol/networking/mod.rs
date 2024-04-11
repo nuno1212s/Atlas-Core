@@ -18,11 +18,11 @@ pub mod serialize;
 pub mod signature_ver;
 
 /// The networking order protocol
-pub trait NetworkedOrderProtocolInitializer<RQ, NT>: OrderingProtocol<RQ>
+pub trait NetworkedOrderProtocolInitializer<RQ, RP, NT>: OrderingProtocol<RQ>
 where
     RQ: SerType,
 {
-    fn initialize<RP>(
+    fn initialize(
         config: Self::Config,
         ordering_protocol_args: OrderingProtocolArgs<RQ, RP, NT>,
     ) -> Result<Self>

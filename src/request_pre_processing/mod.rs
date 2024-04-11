@@ -9,7 +9,7 @@ use atlas_common::error::Result;
 use atlas_communication::message::{Header, StoredMessage};
 use atlas_metrics::metrics::metric_duration;
 
-use crate::messages::{ClientRqInfo, SessionBased};
+use crate::messages::{ClientRqInfo, ForwardedRequestsMessage, SessionBased};
 use crate::metric::RQ_PP_WORKER_PROPOSER_PASSING_TIME_ID;
 use crate::timeouts::timeout::ModTimeout;
 
@@ -54,6 +54,21 @@ pub trait RequestPreProcessorTimeout {
     /// Process a given message containing timeouts
     fn process_timeouts(&self, timeouts: Vec<ModTimeout>,
                         response_channel: ChannelSyncTx<(Vec<ModTimeout>, Vec<ModTimeout>)>) -> Result<()>;
+}
+
+
+/// The request pre-processor trait.
+///
+/// This trait is responsible for processing requests that have been forwarded to the current replica.
+pub trait RequestPreProcessing<O> {
+    /// Process a given message containing forwarded requests
+    fn process_forwarded_requests(&self, message: StoredMessage<ForwardedRequestsMessage<O>>) -> Result<()>;
+
+    /// Process a given message containing stopped requests
+    fn process_stopped_requests(&self, messages: Vec<StoredMessage<O>>) -> Result<()>;
+
+    /// Process a batch of requests that have been ordered
+    fn process_decided_batch(&self, client_rqs: Vec<ClientRqInfo>) -> Result<()>;
 }
 
 pub type PreProcessorOutput<O> = (PreProcessorOutputMessage<O>, Instant);
