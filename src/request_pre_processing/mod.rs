@@ -43,10 +43,10 @@ pub trait RequestPProcessorAsync<O> {
 pub trait RequestPProcessorSync<O> {
     
     /// Clone the given pending client requests
-    fn clone_pending_rqs(&self, client_rqs: Vec<ClientRqInfo>) -> Vec<StoredMessage<O>>;
+    fn clone_pending_rqs(&self, client_rqs: Vec<ClientRqInfo>) -> Result<Vec<StoredMessage<O>>>;
 
     /// Collect all pending client requests
-    fn collect_pending_rqs(&self) -> Vec<StoredMessage<O>>;
+    fn collect_pending_rqs(&self) -> Result<Vec<StoredMessage<O>>>;
 }
 
 /// The request pre-processor timeout trait.
