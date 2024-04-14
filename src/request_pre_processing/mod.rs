@@ -2,7 +2,7 @@ use std::ops::Deref;
 use std::time::{Duration, Instant};
 use std::vec::IntoIter;
 
-use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx, OneShotRx, RecvError, TryRecvError};
+use atlas_common::channel::{ChannelMixedRx, ChannelSyncRx, ChannelSyncTx, OneShotRx, RecvError, TryRecvError};
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::SeqNo;
 use atlas_common::error::Result;
@@ -34,9 +34,9 @@ pub trait WorkPartitioner: Send {
 
 pub trait RequestPProcessorAsync<O> {
     
-    fn clone_pending_rqs(&self, client_rqs: Vec<ClientRqInfo>) -> Result<ChannelSyncRx<Vec<StoredMessage<O>>>>;
+    fn clone_pending_rqs(&self, client_rqs: Vec<ClientRqInfo>) -> Result<ChannelMixedRx<Vec<StoredMessage<O>>>>;
     
-    fn collect_pending_rqs(&self) -> Result<ChannelSyncRx<Vec<StoredMessage<O>>>>;
+    fn collect_pending_rqs(&self) -> Result<ChannelMixedRx<Vec<StoredMessage<O>>>>;
     
 }
 

@@ -11,6 +11,7 @@ use std::time::{Duration, SystemTime, SystemTimeError};
 use thiserror::Error;
 use tracing::error;
 use tracing::instrument;
+use tracing::Level;
 
 use atlas_common::channel::{ChannelSyncRx, TryRecvError};
 use atlas_common::collections::HashMap;
@@ -121,7 +122,7 @@ impl<WR> TimeoutWorker<WR>
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), level = Level::DEBUG)]
     fn process_message(
         &mut self,
         message: WorkerMessage,
@@ -215,7 +216,7 @@ impl<WR> TimeoutWorker<WR>
         Ok(())
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), level = Level::DEBUG)]
     fn remove_time_out(&mut self, timeout_id: &TimeoutIdentification) {
         if let Some(watched) = self.watched_requests.remove(timeout_id) {
             let timeout_time = watched.borrow().timeout_time();
@@ -236,7 +237,7 @@ impl<WR> TimeoutWorker<WR>
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), level = Level::DEBUG)]
     fn process_timeouts(&mut self) -> Result<(), TimeoutError> {
         let current_sys_time = SystemTime::now();
 
