@@ -26,7 +26,7 @@ use crate::messages::ClientRqInfo;
 use crate::ordering_protocol::networking::serialize::{
     OrderingProtocolMessage, PermissionedOrderingProtocolMessage,
 };
-use crate::request_pre_processing::{BatchOutput};
+use crate::request_pre_processing::BatchOutput;
 use crate::timeouts::timeout::{TimeoutModHandle, TimeoutableMod};
 
 pub mod loggable;

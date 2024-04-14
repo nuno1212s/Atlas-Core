@@ -13,6 +13,7 @@ use tracing::error;
 use tracing::instrument;
 use tracing::Level;
 
+use crate::request_pre_processing::{operation_key, operation_key_raw};
 use atlas_common::channel::{ChannelSyncRx, TryRecvError};
 use atlas_common::collections::HashMap;
 use atlas_common::node_id::NodeId;
@@ -30,6 +31,7 @@ pub(super) enum WorkerMessage {
     Cancel(TimeoutIdentification),
     CancelMultiple(Vec<TimeoutIdentification>),
     CancelAll(Arc<str>),
+    ResetAll(Arc<str>),
 }
 
 enum TimeoutPhase {
@@ -100,8 +102,8 @@ pub(super) fn initialize_worker_thread<WR>(
 }
 
 impl<WR> TimeoutWorker<WR>
-    where
-        WR: TimeoutWorkerResponder,
+where
+    WR: TimeoutWorkerResponder,
 {
     fn run(&mut self) -> Result<(), TimeoutError> {
         let duration = Duration::from_millis(1);
@@ -112,7 +114,8 @@ impl<WR> TimeoutWorker<WR>
                     self.process_message(message)?;
                 }
                 Err(e) => {
-                    if let TryRecvError::Timeout = e {} else {
+                    if let TryRecvError::Timeout = e {
+                    } else {
                         error!("Error receiving message: {:?}", e);
                     }
                 }
@@ -153,6 +156,9 @@ impl<WR> TimeoutWorker<WR>
             }
             WorkerMessage::CancelAll(module_name) => {
                 self.cancel_all_rqs_for_mod(module_name)?;
+            }
+            WorkerMessage::ResetAll(mod_name) => {
+                self.reset_all_rqs_for_mod(mod_name)?;
             }
         }
 
@@ -222,18 +228,25 @@ impl<WR> TimeoutWorker<WR>
             let timeout_time = watched.borrow().timeout_time();
 
             if let Some(vec) = self.pending_timeout_heap.get_mut(&timeout_time) {
-                let removed_position = vec.iter()
+                let removed_position = vec
+                    .iter()
                     .position(|rq| Rc::ptr_eq(rq, &watched))
                     .map(|pos| vec.swap_remove(pos));
-                
+
                 if removed_position.is_none() {
                     error!("Failed to remove timeout from heap {:?}", timeout_id);
                 };
             } else {
-                error!("Removed timeout that was no longer in the pending timeout heap? {:?}", timeout_id);
+                error!(
+                    "Removed timeout that was no longer in the pending timeout heap? {:?}",
+                    timeout_id
+                );
             }
         } else {
-            error!("Provided timeout that is not currently being tracked {:?}", timeout_id);
+            error!(
+                "Provided timeout that is not currently being tracked {:?}",
+                timeout_id
+            );
         }
     }
 
@@ -313,6 +326,36 @@ impl<WR> TimeoutWorker<WR>
 
         Ok(())
     }
+
+    fn reset_all_rqs_for_mod(&mut self, mod_name: Arc<str>) -> Result<(), ResetTimeoutError> {
+        let mut removed_timeouts: Vec<_> = self
+            .pending_timeout_heap
+            .values_mut()
+            .flat_map(|timeouts| {
+                timeouts
+                    .extract_if(|rq| Arc::ptr_eq(rq.borrow().request().id().mod_id(), &mod_name))
+            })
+            .collect();
+
+        removed_timeouts.iter_mut().for_each(|rq| {
+            let mut timeout_ref = rq.borrow_mut();
+
+            timeout_ref.timeout_phase = TimeoutPhase::NeverTimedOut;
+            timeout_ref.acks_received.clear();
+        });
+
+        let timeout_time = SystemTime::now()
+            .add(self.default_timeout_duration)
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_millis() as u64;
+
+        self.pending_timeout_heap
+            .entry(timeout_time)
+            .or_default()
+            .append(&mut removed_timeouts);
+
+        Ok(())
+    }
 }
 
 impl TimeoutPhase {
@@ -376,10 +419,18 @@ pub enum ProcessTimeoutMessageError {
     TimeoutProcessFailed(#[from] ProcessTimeoutError),
     #[error("Failed to clear all occurrences {0}")]
     ClearingAllOccurrences(#[from] ClearAllOcurrencesError),
+    #[error("Failed to reset timeouts: {0}")]
+    ResetTimeouts(#[from] ResetTimeoutError),
 }
 
 #[derive(Error, Debug)]
 pub enum ClearAllOcurrencesError {}
+
+#[derive(Error, Debug)]
+pub enum ResetTimeoutError {
+    #[error("Failed to calculate system time? {0}")]
+    SystemTime(#[from] SystemTimeError),
+}
 
 #[derive(Error, Debug)]
 pub enum AcceptAckError {

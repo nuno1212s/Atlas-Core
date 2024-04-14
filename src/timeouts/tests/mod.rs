@@ -30,14 +30,14 @@ mod timeouts_test {
             },
         },];
     }
-    
+
     fn setup_tracing_subscriber() -> WorkerGuard {
         let (console_nb, guard_3) = tracing_appender::non_blocking(std::io::stdout());
-        
+
         tracing_subscriber::fmt::fmt()
             .with_writer(console_nb)
             .init();
-    
+
         guard_3
     }
 
@@ -59,7 +59,7 @@ mod timeouts_test {
 
     fn setup_timeouts() -> (TimeoutsHandle, ChannelSyncRx<Vec<Timeout>>, WorkerGuard) {
         let guard = setup_tracing_subscriber();
-        
+
         let (tx, rx) = init_timeout_rx();
 
         let handle = initialize_timeouts(OUR_ID, 1, 10, tx);
@@ -91,7 +91,7 @@ mod timeouts_test {
     fn ack_timeout(timeout_id: TimeoutIdentification, from: NodeId, handle: &TimeoutsHandle) {
         handle.ack_received(timeout_id, from).unwrap();
     }
-    
+
     fn cancel_timeout(timeout_id: TimeoutIdentification, handle: &TimeoutsHandle) {
         handle.cancel_timeout(timeout_id).unwrap();
     }
@@ -211,10 +211,9 @@ mod timeouts_test {
 
         assert!(timeouts.is_err());
     }
-    
+
     #[test]
     fn test_timeout_cancel() {
-
         let (handle, timeout_rx, _) = setup_timeouts();
 
         start_timeout(TIMEOUT_IDS[0].clone(), &handle);

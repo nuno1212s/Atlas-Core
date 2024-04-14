@@ -131,7 +131,8 @@ impl TimeoutModHandle {
 
     #[instrument(skip(self), level = "trace", fields(mod_name = &*self.mod_name))]
     pub fn reset_all_timeouts(&self) -> atlas_common::error::Result<()> {
-        todo!()
+        self.timeout_handle
+            .reset_all_timeouts_for_mod(self.mod_name.clone())
     }
 }
 

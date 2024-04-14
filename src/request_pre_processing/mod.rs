@@ -2,10 +2,12 @@ use std::ops::Deref;
 use std::time::{Duration, Instant};
 use std::vec::IntoIter;
 
-use atlas_common::channel::{ChannelMixedRx, ChannelSyncRx, ChannelSyncTx, OneShotRx, RecvError, TryRecvError};
+use atlas_common::channel::{
+    ChannelMixedRx, ChannelSyncRx, ChannelSyncTx, OneShotRx, RecvError, TryRecvError,
+};
+use atlas_common::error::Result;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::SeqNo;
-use atlas_common::error::Result;
 use atlas_communication::message::{Header, StoredMessage};
 use atlas_metrics::metrics::metric_duration;
 
@@ -23,8 +25,8 @@ pub mod work_dividers;
 pub trait WorkPartitioner: Send {
     /// Get the worker that should process this request
     fn get_worker_for<O>(rq_info: &Header, message: &O, worker_count: usize) -> usize
-        where
-            O: SessionBased;
+    where
+        O: SessionBased;
 
     /// Get the worker that should process this request
     fn get_worker_for_processed(rq_info: &ClientRqInfo, worker_count: usize) -> usize;
@@ -33,15 +35,15 @@ pub trait WorkPartitioner: Send {
 }
 
 pub trait RequestPProcessorAsync<O> {
-    
-    fn clone_pending_rqs(&self, client_rqs: Vec<ClientRqInfo>) -> Result<ChannelMixedRx<Vec<StoredMessage<O>>>>;
-    
+    fn clone_pending_rqs(
+        &self,
+        client_rqs: Vec<ClientRqInfo>,
+    ) -> Result<ChannelMixedRx<Vec<StoredMessage<O>>>>;
+
     fn collect_pending_rqs(&self) -> Result<ChannelMixedRx<Vec<StoredMessage<O>>>>;
-    
 }
 
 pub trait RequestPProcessorSync<O> {
-    
     /// Clone the given pending client requests
     fn clone_pending_rqs(&self, client_rqs: Vec<ClientRqInfo>) -> Result<Vec<StoredMessage<O>>>;
 
@@ -52,17 +54,22 @@ pub trait RequestPProcessorSync<O> {
 /// The request pre-processor timeout trait.
 pub trait RequestPreProcessorTimeout {
     /// Process a given message containing timeouts
-    fn process_timeouts(&self, timeouts: Vec<ModTimeout>,
-                        response_channel: ChannelSyncTx<(Vec<ModTimeout>, Vec<ModTimeout>)>) -> Result<()>;
+    fn process_timeouts(
+        &self,
+        timeouts: Vec<ModTimeout>,
+        response_channel: ChannelSyncTx<(Vec<ModTimeout>, Vec<ModTimeout>)>,
+    ) -> Result<()>;
 }
-
 
 /// The request pre-processor trait.
 ///
 /// This trait is responsible for processing requests that have been forwarded to the current replica.
 pub trait RequestPreProcessing<O> {
     /// Process a given message containing forwarded requests
-    fn process_forwarded_requests(&self, message: StoredMessage<ForwardedRequestsMessage<O>>) -> Result<()>;
+    fn process_forwarded_requests(
+        &self,
+        message: StoredMessage<ForwardedRequestsMessage<O>>,
+    ) -> Result<()>;
 
     /// Process a given message containing stopped requests
     fn process_stopped_requests(&self, messages: Vec<StoredMessage<O>>) -> Result<()>;
@@ -112,7 +119,6 @@ impl<O> From<PreProcessorOutputMessage<O>> for Vec<StoredMessage<O>> {
     }
 }
 
-
 impl<O> From<ChannelSyncRx<PreProcessorOutput<O>>> for BatchOutput<O> {
     fn from(value: ChannelSyncRx<PreProcessorOutput<O>>) -> Self {
         Self(value)
@@ -158,8 +164,8 @@ impl<O> BatchOutput<O> {
 
 #[inline]
 pub fn operation_key<O>(header: &Header, message: &O) -> u64
-    where
-        O: SessionBased,
+where
+    O: SessionBased,
 {
     operation_key_raw(header.from(), message.session_number())
 }

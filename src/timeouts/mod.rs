@@ -244,6 +244,15 @@ impl TimeoutsHandle {
             .iter()
             .try_for_each(|worker| worker.send(WorkerMessage::CancelAll(mod_name.clone())))
     }
+
+    pub fn reset_all_timeouts_for_mod(
+        &self,
+        mod_name: Arc<str>,
+    ) -> atlas_common::error::Result<()> {
+        self.worker_handles
+            .iter()
+            .try_for_each(|worker| worker.send(WorkerMessage::ResetAll(mod_name.clone())))
+    }
 }
 
 impl PartialOrd for TimeoutID {
