@@ -65,6 +65,7 @@ pub trait RequestPreProcessorTimeout {
 ///
 /// This trait is responsible for processing requests that have been forwarded to the current replica.
 pub trait RequestPreProcessing<O> {
+    
     /// Process a given message containing forwarded requests
     fn process_forwarded_requests(
         &self,
@@ -76,6 +77,17 @@ pub trait RequestPreProcessing<O> {
 
     /// Process a batch of requests that have been ordered
     fn process_decided_batch(&self, client_rqs: Vec<ClientRqInfo>) -> Result<()>;
+}
+
+/// The trait that deligns the behaviour necessary for the request pre processing to handle 
+/// client requests.
+/// 
+/// Specifically this is made in order to handle clients that are connecting to us,
+/// and therefore are starting from a blank slate in terms of session and operation sequence numbers
+pub trait RequestClientPreProcessing {
+ 
+    fn reset_client(&self, client_id: NodeId) -> Result<()>;
+    
 }
 
 pub type PreProcessorOutput<O> = (PreProcessorOutputMessage<O>, Instant);

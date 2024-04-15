@@ -9,9 +9,7 @@ use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
 use atlas_common::crypto::threshold_crypto::{PrivateKeyPart, PublicKeyPart, PublicKeySet};
 use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
-use atlas_communication::reconfiguration::{
-    NetworkInformationProvider, ReconfigurationMessageHandler,
-};
+use atlas_communication::reconfiguration::{NetworkInformationProvider, NodeInfo, ReconfigurationMessageHandler};
 use atlas_communication::stub::RegularNetworkStub;
 
 use crate::serialize::ReconfigurationProtocolMessage;
@@ -38,6 +36,15 @@ pub enum QuorumReconfigurationMessage {
 
     // We are going to attempt to join the quorum
     AttemptToJoinQuorum,
+}
+
+/// A message that the reconfiguration protocol will emit
+/// on network update events
+pub enum NetworkUpdateMessage {
+    // A node has connected to us.
+    NodeConnected(NodeInfo),
+    // A node has disconnected from us.
+    NodeDisconnected(NodeInfo)
 }
 
 /// Messages sent by the ordering protocol to notify the reconfiguration protocol of changes
@@ -81,11 +88,18 @@ pub enum QuorumUpdateMessage {
     UpdatedQuorumView(Vec<NodeId>),
 }
 
+/// The communication handles for communication between the orchestrator
+/// and the reconfiguration protocol
+pub struct ReconfigurationCommunicationHandles {
+    network_update: ChannelSyncTx<NetworkUpdateMessage>,
+    node_type: ReconfigurableNodeType
+}
+
 /// The type of reconfigurable nodes.
 /// Quorum nodes are nodes that partake in the quorum
 /// Client nodes are nodes that only listen to quorum updates so they know who
 /// to contact in order to perform operations
-pub enum ReconfigurableNodeTypes {
+pub enum ReconfigurableNodeType {
     ClientNode(ChannelSyncTx<QuorumUpdateMessage>),
     QuorumNode(
         ChannelSyncTx<QuorumReconfigurationMessage>,
@@ -140,7 +154,7 @@ pub trait ReconfigurationProtocol:
         information: Arc<Self::InformationProvider>,
         node: Arc<NT>,
         timeouts: TimeoutModHandle,
-        node_type: ReconfigurableNodeTypes,
+        node_type: ReconfigurationCommunicationHandles,
         reconfig: ReconfigurationMessageHandler,
         min_stable_node_count: usize,
     ) -> Result<Self>
@@ -181,15 +195,24 @@ pub trait QuorumThresholdCrypto: Send + Sync {
     fn get_priv_key_part(&self) -> Result<&PrivateKeyPart>;
 }
 
-impl Debug for ReconfigurableNodeTypes {
+impl Debug for ReconfigurableNodeType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ReconfigurableNodeTypes::ClientNode(_) => {
+            ReconfigurableNodeType::ClientNode(_) => {
                 write!(f, "Client Node")
             }
-            ReconfigurableNodeTypes::QuorumNode(_, _) => {
+            ReconfigurableNodeType::QuorumNode(_, _) => {
                 write!(f, "Replica Node")
             }
+        }
+    }
+}
+
+impl From<(ChannelSyncTx<NetworkUpdateMessage>, ReconfigurableNodeType)> for ReconfigurationCommunicationHandles {
+    fn from(value: (ChannelSyncTx<NetworkUpdateMessage>, ReconfigurableNodeType)) -> Self {
+        Self {
+            network_update: value.0,
+            node_type: value.1,
         }
     }
 }
