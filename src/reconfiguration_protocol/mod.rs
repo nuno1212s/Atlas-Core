@@ -9,7 +9,7 @@ use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
 use atlas_common::crypto::threshold_crypto::{PrivateKeyPart, PublicKeyPart, PublicKeySet};
 use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
-use atlas_communication::reconfiguration::{NetworkInformationProvider, NodeInfo, ReconfigurationMessageHandler};
+use atlas_communication::reconfiguration::{NetworkInformationProvider, NodeInfo, ReconfigurationNetworkCommunication};
 use atlas_communication::stub::RegularNetworkStub;
 
 use crate::serialize::ReconfigurationProtocolMessage;
@@ -40,12 +40,14 @@ pub enum QuorumReconfigurationMessage {
 
 /// A message that the reconfiguration protocol will emit
 /// on network update events
-pub enum NetworkUpdateMessage {
+pub enum NodeConnectionUpdateMessage {
     // A node has connected to us.
     NodeConnected(NodeInfo),
     // A node has disconnected from us.
-    NodeDisconnected(NodeInfo)
+    NodeDisconnected(NodeInfo),
 }
+
+pub type ConnectionUpdateChannelHandle = ChannelSyncTx<NodeConnectionUpdateMessage>;
 
 /// Messages sent by the ordering protocol to notify the reconfiguration protocol of changes
 /// to the quorum
@@ -91,8 +93,8 @@ pub enum QuorumUpdateMessage {
 /// The communication handles for communication between the orchestrator
 /// and the reconfiguration protocol
 pub struct ReconfigurationCommunicationHandles {
-    network_update: ChannelSyncTx<NetworkUpdateMessage>,
-    node_type: ReconfigurableNodeType
+    network_update: ChannelSyncTx<NodeConnectionUpdateMessage>,
+    node_type: ReconfigurableNodeType,
 }
 
 /// The type of reconfigurable nodes.
@@ -130,7 +132,7 @@ pub enum ReconfigResponse {
 /// The reconfiguration protocol acts as the network information acquirer, acquiring new nodes,
 /// verifying their integrity and correctness
 pub trait ReconfigurationProtocol:
-    TimeoutableMod<ReconfigResponse> + Send + Sync + 'static
+TimeoutableMod<ReconfigResponse> + Send + Sync + 'static
 {
     // The configuration type the protocol wants to receive
     type Config;
@@ -155,12 +157,12 @@ pub trait ReconfigurationProtocol:
         node: Arc<NT>,
         timeouts: TimeoutModHandle,
         node_type: ReconfigurationCommunicationHandles,
-        reconfig: ReconfigurationMessageHandler,
+        reconfig: ReconfigurationNetworkCommunication,
         min_stable_node_count: usize,
     ) -> Result<Self>
-    where
-        NT: RegularNetworkStub<Self::Serialization> + 'static,
-        Self: Sized;
+        where
+            NT: RegularNetworkStub<Self::Serialization> + 'static,
+            Self: Sized;
 
     /// Get the current quorum members of the system
     fn get_quorum_members(&self) -> Vec<NodeId>;
@@ -208,11 +210,27 @@ impl Debug for ReconfigurableNodeType {
     }
 }
 
-impl From<(ChannelSyncTx<NetworkUpdateMessage>, ReconfigurableNodeType)> for ReconfigurationCommunicationHandles {
-    fn from(value: (ChannelSyncTx<NetworkUpdateMessage>, ReconfigurableNodeType)) -> Self {
+impl
+From<(
+    ConnectionUpdateChannelHandle,
+    ReconfigurableNodeType,
+)> for ReconfigurationCommunicationHandles
+{
+    fn from(
+        value: (
+            ConnectionUpdateChannelHandle,
+            ReconfigurableNodeType,
+        ),
+    ) -> Self {
         Self {
             network_update: value.0,
             node_type: value.1,
         }
+    }
+}
+
+impl From<ReconfigurationCommunicationHandles> for (ConnectionUpdateChannelHandle, ReconfigurableNodeType) {
+    fn from(value: ReconfigurationCommunicationHandles) -> Self {
+        (value.network_update, value.node_type)
     }
 }
