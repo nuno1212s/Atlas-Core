@@ -89,7 +89,6 @@ pub trait RequestClientPreProcessing {
 
 pub type PreProcessorOutput<O> = (PreProcessorOutputMessage<O>, Instant);
 
-#[derive(Clone)]
 pub struct BatchOutput<O>(ChannelSyncRx<PreProcessorOutput<O>>);
 
 /// The request output message
@@ -197,4 +196,10 @@ pub fn operation_key_raw(from: NodeId, session: SeqNo) -> u64 {
 
     // therefore this is safe, and will not delete any bits
     (session_id << 32) | client_id
+}
+
+impl<O> Clone for BatchOutput<O> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
 }

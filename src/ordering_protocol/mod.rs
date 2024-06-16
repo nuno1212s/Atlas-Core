@@ -43,10 +43,14 @@ pub type ShareableMessage<P> = Arc<ReadOnly<StoredMessage<P>>>;
 pub type ProtocolMessage<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProtocolMessage;
 pub type DecisionMetadata<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProofMetadata;
 
-pub struct OrderingProtocolArgs<R, RP, NT>(
+/// The arguments that are necessary for the ordering protocol to be initialized
+/// The R request type,
+/// The RQPP: Request pre processor
+/// The NT: Network 
+pub struct OrderingProtocolArgs<R, RQPP, NT>(
     pub NodeId,
     pub TimeoutModHandle,
-    pub RP,
+    pub RQPP,
     pub BatchOutput<R>,
     pub Arc<NT>,
     pub Vec<NodeId>,
