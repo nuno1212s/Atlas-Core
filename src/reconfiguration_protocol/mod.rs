@@ -9,7 +9,9 @@ use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
 use atlas_common::crypto::threshold_crypto::{PrivateKeyPart, PublicKeyPart, PublicKeySet};
 use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
-use atlas_communication::reconfiguration::{NetworkInformationProvider, NodeInfo, ReconfigurationNetworkCommunication};
+use atlas_communication::reconfiguration::{
+    NetworkInformationProvider, NodeInfo, ReconfigurationNetworkCommunication,
+};
 use atlas_communication::stub::RegularNetworkStub;
 
 use crate::serialize::ReconfigurationProtocolMessage;
@@ -132,7 +134,7 @@ pub enum ReconfigResponse {
 /// The reconfiguration protocol acts as the network information acquirer, acquiring new nodes,
 /// verifying their integrity and correctness
 pub trait ReconfigurationProtocol:
-TimeoutableMod<ReconfigResponse> + Send + Sync + 'static
+    TimeoutableMod<ReconfigResponse> + Send + Sync + 'static
 {
     // The configuration type the protocol wants to receive
     type Config;
@@ -160,9 +162,9 @@ TimeoutableMod<ReconfigResponse> + Send + Sync + 'static
         reconfig: ReconfigurationNetworkCommunication,
         min_stable_node_count: usize,
     ) -> Result<Self>
-        where
-            NT: RegularNetworkStub<Self::Serialization> + 'static,
-            Self: Sized;
+    where
+        NT: RegularNetworkStub<Self::Serialization> + 'static,
+        Self: Sized;
 
     /// Get the current quorum members of the system
     fn get_quorum_members(&self) -> Vec<NodeId>;
@@ -210,18 +212,10 @@ impl Debug for ReconfigurableNodeType {
     }
 }
 
-impl
-From<(
-    ConnectionUpdateChannelHandle,
-    ReconfigurableNodeType,
-)> for ReconfigurationCommunicationHandles
+impl From<(ConnectionUpdateChannelHandle, ReconfigurableNodeType)>
+    for ReconfigurationCommunicationHandles
 {
-    fn from(
-        value: (
-            ConnectionUpdateChannelHandle,
-            ReconfigurableNodeType,
-        ),
-    ) -> Self {
+    fn from(value: (ConnectionUpdateChannelHandle, ReconfigurableNodeType)) -> Self {
         Self {
             network_update: value.0,
             node_type: value.1,
@@ -229,7 +223,9 @@ From<(
     }
 }
 
-impl From<ReconfigurationCommunicationHandles> for (ConnectionUpdateChannelHandle, ReconfigurableNodeType) {
+impl From<ReconfigurationCommunicationHandles>
+    for (ConnectionUpdateChannelHandle, ReconfigurableNodeType)
+{
     fn from(value: ReconfigurationCommunicationHandles) -> Self {
         (value.network_update, value.node_type)
     }

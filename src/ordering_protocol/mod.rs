@@ -46,7 +46,7 @@ pub type DecisionMetadata<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProofMe
 /// The arguments that are necessary for the ordering protocol to be initialized
 /// The R request type,
 /// The RQPP: Request pre processor
-/// The NT: Network 
+/// The NT: Network
 pub struct OrderingProtocolArgs<R, RQPP, NT>(
     pub NodeId,
     pub TimeoutModHandle,

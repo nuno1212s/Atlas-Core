@@ -25,8 +25,8 @@ pub mod work_dividers;
 pub trait WorkPartitioner: Send {
     /// Get the worker that should process this request
     fn get_worker_for<O>(rq_info: &Header, message: &O, worker_count: usize) -> usize
-        where
-            O: SessionBased;
+    where
+        O: SessionBased;
 
     /// Get the worker that should process this request
     fn get_worker_for_processed(rq_info: &ClientRqInfo, worker_count: usize) -> usize;
@@ -172,8 +172,8 @@ impl<O> BatchOutput<O> {
 
 #[inline]
 pub fn operation_key<O>(header: &Header, message: &O) -> u64
-    where
-        O: SessionBased,
+where
+    O: SessionBased,
 {
     operation_key_raw(header.from(), message.session_number())
 }
