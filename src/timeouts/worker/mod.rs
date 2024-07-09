@@ -106,7 +106,7 @@ where
     WR: TimeoutWorkerResponder,
 {
     fn run(&mut self) -> Result<(), TimeoutError> {
-        let duration = Duration::from_millis(1);
+        let duration = Duration::from_millis(1000);
 
         loop {
             match self.work_rx_channel.recv_timeout(duration) {
