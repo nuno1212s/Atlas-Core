@@ -1,9 +1,8 @@
+#[cfg(feature = "serialize_serde")]
+use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-
-#[cfg(feature = "serialize_serde")]
-use serde::{Deserialize, Serialize};
 
 use crate::timeouts::TimeOutable;
 use atlas_common::crypto::hash::Digest;
@@ -345,4 +344,23 @@ impl<RP> SessionBased for ReplyMessage<RP> {
     fn session_number(&self) -> SeqNo {
         self.session_id
     }
+}
+
+pub fn create_rq_correlation_id<RQ>(node: NodeId, rq: &RQ) -> String
+where
+    RQ: SessionBased,
+{
+    create_rq_correlation_id_from_parts(node, rq.session_number(), rq.sequence_number())
+}
+
+pub fn create_rq_correlation_id_from_info(client_rq_info: &ClientRqInfo) -> String {
+    create_rq_correlation_id_from_parts(
+        client_rq_info.sender,
+        client_rq_info.session,
+        client_rq_info.seq_no,
+    )
+}
+
+pub fn create_rq_correlation_id_from_parts(node: NodeId, session: SeqNo, seq: SeqNo) -> String {
+    format!("{}-{}-{}", node.0, session.into_u32(), seq.into_u32())
 }

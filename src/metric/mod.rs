@@ -20,6 +20,15 @@ pub const TIMEOUT_MESSAGE_PROCESSING_ID: usize = 30;
 pub const TIMEOUT_MESSAGES_PROCESSED: &str = "TIMEOUT_MESSAGES_PROCESSED";
 pub const TIMEOUT_MESSAGES_PROCESSED_ID: usize = 31;
 
+pub const RQ_CLIENT_TRACKING: &str = "RQ_CLIENT_TRACKING";
+pub const RQ_CLIENT_TRACKING_ID: usize = 32;
+
+pub const RQ_BATCH_TRACKING: &str = "RQ_BATCH_TRACKING";
+pub const RQ_BATCH_TRACKING_ID: usize = 33;
+
+pub const RQ_CLIENT_TRACK_GLOBAL: &str = "RQ_CLIENT_TRACK_GLOBAL";
+pub const RQ_CLIENT_TRACK_GLOBAL_ID: usize = 34;
+
 pub fn metrics() -> Vec<MetricRegistry> {
     vec![
         (
@@ -56,5 +65,26 @@ pub fn metrics() -> Vec<MetricRegistry> {
             MetricLevel::Debug,
         )
             .into(),
+        (
+            RQ_CLIENT_TRACKING_ID,
+            RQ_CLIENT_TRACKING.to_string(),
+            MetricKind::Correlation,
+            MetricLevel::Debug,
+        )
+            .into(),
+        (
+            RQ_BATCH_TRACKING_ID,
+            RQ_BATCH_TRACKING.to_string(),
+            MetricKind::Correlation,
+            MetricLevel::Debug,
+        )
+            .into(),
+        (
+            RQ_CLIENT_TRACK_GLOBAL_ID,
+            RQ_CLIENT_TRACK_GLOBAL.to_string(),
+            MetricKind::CorrelationTracker,
+            MetricLevel::Debug,
+        )
+            .into()
     ]
 }
