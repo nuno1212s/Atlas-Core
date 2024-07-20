@@ -69,14 +69,14 @@ pub fn metrics() -> Vec<MetricRegistry> {
             RQ_CLIENT_TRACKING_ID,
             RQ_CLIENT_TRACKING.to_string(),
             MetricKind::Correlation,
-            MetricLevel::Trace,
+            MetricLevel::Disabled,
         )
             .into(),
         (
             RQ_BATCH_TRACKING_ID,
             RQ_BATCH_TRACKING.to_string(),
             MetricKind::Correlation,
-            MetricLevel::Trace,
+            MetricLevel::Disabled,
         )
             .into(),
         (
