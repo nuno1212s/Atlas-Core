@@ -69,22 +69,22 @@ pub fn metrics() -> Vec<MetricRegistry> {
             RQ_CLIENT_TRACKING_ID,
             RQ_CLIENT_TRACKING.to_string(),
             MetricKind::Correlation,
-            MetricLevel::Debug,
+            MetricLevel::Trace,
         )
             .into(),
         (
             RQ_BATCH_TRACKING_ID,
             RQ_BATCH_TRACKING.to_string(),
             MetricKind::Correlation,
-            MetricLevel::Debug,
+            MetricLevel::Trace,
         )
             .into(),
         (
             RQ_CLIENT_TRACK_GLOBAL_ID,
             RQ_CLIENT_TRACK_GLOBAL.to_string(),
-            MetricKind::CorrelationTracker,
+            MetricKind::CorrelationAggrDurationTracker,
             MetricLevel::Debug,
         )
-            .into()
+            .into(),
     ]
 }
