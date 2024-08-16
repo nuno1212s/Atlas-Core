@@ -1,6 +1,10 @@
 #![cfg(test)]
+pub mod timeouts_tests {
 
-mod timeouts_test {
+    pub use crate::timeouts::*;
+    pub use crate::timeouts::timeout::*;
+    pub use crate::timeouts::worker::*;
+    
     use lazy_static::lazy_static;
     use std::sync::Arc;
     use std::time::Duration;
@@ -9,11 +13,6 @@ mod timeouts_test {
     use atlas_common::channel::{new_bounded_sync, ChannelSyncRx, ChannelSyncTx};
     use atlas_common::node_id::NodeId;
     use atlas_common::ordering::SeqNo;
-
-    use crate::timeouts::{
-        initialize_timeouts, Timeout, TimeoutID, TimeoutIdentification, TimeoutWorkerResponder,
-        TimeoutsHandle,
-    };
 
     const OUR_ID: NodeId = NodeId(0);
     const ID_1: NodeId = NodeId(1);
@@ -34,9 +33,9 @@ mod timeouts_test {
     fn setup_tracing_subscriber() -> WorkerGuard {
         let (console_nb, guard_3) = tracing_appender::non_blocking(std::io::stdout());
 
-        tracing_subscriber::fmt::fmt()
+        let _ = tracing_subscriber::fmt::fmt()
             .with_writer(console_nb)
-            .init();
+            .try_init();
 
         guard_3
     }

@@ -10,9 +10,6 @@ use std::time::{Duration, SystemTime, SystemTimeError};
 
 use thiserror::Error;
 use tracing::error;
-use tracing::instrument;
-use tracing::Level;
-
 use crate::request_pre_processing::{operation_key, operation_key_raw};
 use atlas_common::channel::{ChannelSyncRx, TryRecvError};
 use atlas_common::collections::HashMap;
@@ -23,7 +20,7 @@ use crate::timeouts::{
 };
 
 #[derive(Debug)]
-pub(super) enum WorkerMessage {
+pub enum WorkerMessage {
     Request(TimeoutRequest),
     Requests(Vec<TimeoutRequest>),
     Ack(TimeoutAck),
@@ -54,7 +51,7 @@ struct RegisteredTimeout {
     request: TimeoutRequest,
 }
 
-struct TimeoutWorker<WR> {
+pub struct TimeoutWorker<WR> {
     our_node_id: NodeId,
     worker_id: u32,
     default_timeout_duration: Duration,
@@ -66,7 +63,8 @@ struct TimeoutWorker<WR> {
     watched_requests: HashMap<TimeoutIdentification, Rc<RefCell<RegisteredTimeout>>>,
 
     // The timeouts we are currently waiting for
-    pending_timeout_heap: BTreeMap<u64, Vec<Rc<RefCell<RegisteredTimeout>>>>,
+    pending_timeout_heap:
+        BTreeMap<u64, HashMap<TimeoutIdentification, Rc<RefCell<RegisteredTimeout>>>>,
     // The notifier to send timeouts to
     timeout_notifier: WR,
 }
@@ -105,6 +103,24 @@ impl<WR> TimeoutWorker<WR>
 where
     WR: TimeoutWorkerResponder,
 {
+    pub fn new(
+        our_id: NodeId,
+        worker_id: u32,
+        default_timeout_duration: Duration,
+        work_rx_channel: ChannelSyncRx<WorkerMessage>,
+        timeout_notifier: WR,
+    ) -> Self {
+        Self {
+            our_node_id: our_id,
+            worker_id,
+            default_timeout_duration,
+            work_rx_channel,
+            watched_requests: Default::default(),
+            pending_timeout_heap: Default::default(),
+            timeout_notifier,
+        }
+    }
+
     fn run(&mut self) -> Result<(), TimeoutError> {
         let duration = Duration::from_millis(1000);
 
@@ -125,7 +141,7 @@ where
         }
     }
 
-    #[instrument(skip(self), level = Level::DEBUG)]
+    //#[instrument(skip(self), level = Level::DEBUG)]
     fn process_message(
         &mut self,
         message: WorkerMessage,
@@ -165,14 +181,16 @@ where
         Ok(())
     }
 
-    fn handle_timeout_request(
+    pub fn handle_timeout_request(
         &mut self,
         timeout_request: TimeoutRequest,
     ) -> Result<(), ProcessTimeoutError> {
         let registered_rq = Rc::new(RefCell::new(RegisteredTimeout::new(timeout_request)?));
 
+        let request_id = registered_rq.borrow().request().id().clone();
+
         self.watched_requests
-            .entry(registered_rq.borrow().request().id().clone())
+            .entry(request_id.clone())
             .or_insert(registered_rq.clone());
 
         let timeout_time = registered_rq.borrow().timeout_time();
@@ -180,7 +198,7 @@ where
         self.pending_timeout_heap
             .entry(timeout_time)
             .or_default()
-            .push(registered_rq);
+            .insert(request_id, registered_rq);
 
         Ok(())
     }
@@ -196,15 +214,17 @@ where
 
         timeout.borrow_mut().timeout_time = timeout_time;
 
+        let timeout_id = timeout.borrow().request().id().clone();
+
         self.pending_timeout_heap
             .entry(timeout_time)
             .or_default()
-            .push(timeout);
+            .insert(timeout_id, timeout);
 
         Ok(())
     }
 
-    fn handle_timeout_ack(&mut self, timeout_ack: TimeoutAck) -> Result<(), AcceptAckError> {
+    pub fn handle_timeout_ack(&mut self, timeout_ack: TimeoutAck) -> Result<(), AcceptAckError> {
         let should_remove = if let Some(watched) = self.watched_requests.get(timeout_ack.id()) {
             let mut mut_guard = watched.borrow_mut();
 
@@ -222,20 +242,13 @@ where
         Ok(())
     }
 
-    #[instrument(skip(self), level = Level::DEBUG)]
+    //#[instrument(skip(self), level = Level::DEBUG)]
     fn remove_time_out(&mut self, timeout_id: &TimeoutIdentification) {
         if let Some(watched) = self.watched_requests.remove(timeout_id) {
             let timeout_time = watched.borrow().timeout_time();
 
-            if let Some(vec) = self.pending_timeout_heap.get_mut(&timeout_time) {
-                let removed_position = vec
-                    .iter()
-                    .position(|rq| Rc::ptr_eq(rq, &watched))
-                    .map(|pos| vec.swap_remove(pos));
-
-                if removed_position.is_none() {
-                    error!("Failed to remove timeout from heap {:?}", timeout_id);
-                };
+            if let Some(timeouts) = self.pending_timeout_heap.get_mut(&timeout_time) {
+                timeouts.remove(timeout_id);
             } else {
                 error!(
                     "Removed timeout that was no longer in the pending timeout heap? {:?}",
@@ -250,7 +263,7 @@ where
         }
     }
 
-    #[instrument(skip(self), level = Level::DEBUG)]
+    //#[instrument(skip(self), level = Level::DEBUG)]
     fn process_timeouts(&mut self) -> Result<(), TimeoutError> {
         let current_sys_time = SystemTime::now();
 
@@ -267,25 +280,27 @@ where
 
             let (_, requests) = self.pending_timeout_heap.pop_first().unwrap();
 
-            requests.iter().for_each(|rq| rq.borrow_mut().timed_out());
+            requests
+                .iter()
+                .for_each(|(rq_id, rq)| rq.borrow_mut().timed_out());
 
             let (cumulative_stream, non_cumulative_stream): (Vec<_>, Vec<_>) = requests
                 .iter()
-                .partition(|rq| rq.borrow().request().is_cumulative());
+                .partition(|(rq_id, rq)| rq.borrow().request().is_cumulative());
 
             // Re register the cumulative timeouts for the next timeout
             cumulative_stream
                 .into_iter()
-                .try_for_each(|rq| self.re_register_timeout(rq.clone()))?;
+                .try_for_each(|(rq_id, rq)| self.re_register_timeout(rq.clone()))?;
 
             // Remove the non-cumulative ones from the watched list
-            non_cumulative_stream.into_iter().for_each(|rq| {
-                self.watched_requests.remove(rq.borrow().request().id());
+            non_cumulative_stream.into_iter().for_each(|(rq_id, rq)| {
+                self.watched_requests.remove(rq_id);
             });
 
             let mut partial_timeouts = requests
                 .into_iter()
-                .map(|rq| {
+                .map(|(rq_id, rq)| {
                     let rq_borrow = rq.borrow();
 
                     let extra_info = rq_borrow
@@ -321,7 +336,7 @@ where
             .retain(|k, _v| !Arc::ptr_eq(k.mod_id(), &mod_name));
 
         self.pending_timeout_heap.iter_mut().for_each(|(_, v)| {
-            v.retain(|rq| !Arc::ptr_eq(rq.borrow().request().id().mod_id(), &mod_name))
+            v.retain(|k, rq| !Arc::ptr_eq(rq.borrow().request().id().mod_id(), &mod_name))
         });
 
         Ok(())
@@ -332,12 +347,13 @@ where
             .pending_timeout_heap
             .values_mut()
             .flat_map(|timeouts| {
-                timeouts
-                    .extract_if(|rq| Arc::ptr_eq(rq.borrow().request().id().mod_id(), &mod_name))
+                timeouts.extract_if(|rq_id, rq| {
+                    Arc::ptr_eq(rq.borrow().request().id().mod_id(), &mod_name)
+                })
             })
             .collect();
 
-        removed_timeouts.iter_mut().for_each(|rq| {
+        removed_timeouts.iter_mut().for_each(|(timeout_id, rq)| {
             let mut timeout_ref = rq.borrow_mut();
 
             timeout_ref.timeout_phase = TimeoutPhase::NeverTimedOut;
@@ -349,10 +365,11 @@ where
             .duration_since(SystemTime::UNIX_EPOCH)?
             .as_millis() as u64;
 
-        self.pending_timeout_heap
-            .entry(timeout_time)
-            .or_default()
-            .append(&mut removed_timeouts);
+        let pending_timeout_map = self.pending_timeout_heap.entry(timeout_time).or_default();
+
+        removed_timeouts.into_iter().for_each(|(timeout_id, rq)| {
+            pending_timeout_map.insert(timeout_id, rq);
+        });
 
         Ok(())
     }

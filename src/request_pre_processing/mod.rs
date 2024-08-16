@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::time::{Duration, Instant};
 use std::vec::IntoIter;
 
@@ -109,6 +109,12 @@ impl<O> Deref for PreProcessorOutputMessage<O> {
 
     fn deref(&self) -> &Self::Target {
         &self.deduped_requests
+    }
+}
+
+impl<O> DerefMut for PreProcessorOutputMessage<O> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.deduped_requests
     }
 }
 

@@ -8,7 +8,6 @@ use std::time::{Duration, SystemTime};
 use dyn_clone::DynClone;
 use getset::{CopyGetters, Getters};
 use itertools::Itertools;
-use tracing::instrument;
 
 use atlas_common::channel::{new_bounded_sync, ChannelSyncTx};
 use atlas_common::node_id::NodeId;
@@ -18,9 +17,9 @@ use crate::request_pre_processing::operation_key_raw;
 use crate::timeouts::timeout::{TimeoutModHandle, TimeoutableMod};
 use crate::timeouts::worker::WorkerMessage;
 
-mod tests;
+pub mod tests;
 pub mod timeout;
-mod worker;
+pub mod worker;
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub enum TimeoutID {
@@ -53,7 +52,7 @@ pub struct Timeout {
 }
 
 #[derive(CopyGetters, Getters, Debug)]
-struct TimeoutRequest {
+pub struct TimeoutRequest {
     #[get]
     id: TimeoutIdentification,
     #[get]
@@ -75,7 +74,7 @@ pub trait TimeOutable: DynClone + Debug + Send {
 }
 
 #[derive(Getters, CopyGetters, Debug)]
-struct TimeoutAck {
+pub struct TimeoutAck {
     #[get = "pub"]
     id: TimeoutIdentification,
     #[get_copy]
@@ -142,7 +141,7 @@ impl TimeoutsHandle {
         TimeoutModHandle::from_timeout_mod::<M, R>(self.clone())
     }
 
-    #[instrument(skip(self), level = "trace")]
+    //#[instrument(skip(self), level = "trace")]
     pub fn request_timeout(
         &self,
         timeout_id: TimeoutIdentification,
@@ -152,16 +151,16 @@ impl TimeoutsHandle {
         cumulative: bool,
     ) -> atlas_common::error::Result<()> {
         self.worker_for_timeout(&timeout_id)
-            .send(WorkerMessage::Request(TimeoutRequest {
-                id: timeout_id,
-                duration,
-                needed_acks,
-                is_cumulative: cumulative,
-                extra_info,
-            }))
+        .send(WorkerMessage::Request(TimeoutRequest {
+            id: timeout_id,
+            duration,
+            needed_acks,
+            is_cumulative: cumulative,
+            extra_info,
+        }))
     }
 
-    #[instrument(skip(self, timeout_id), level = "trace")]
+    //#[instrument(skip(self, timeout_id), level = "trace")]
     pub fn request_timeouts(
         &self,
         timeout_id: Vec<(TimeoutIdentification, Option<Box<dyn TimeOutable>>)>,
@@ -170,35 +169,35 @@ impl TimeoutsHandle {
         cumulative: bool,
     ) -> atlas_common::error::Result<()> {
         timeout_id
-            .into_iter()
-            .map(|(id, extra_info)| TimeoutRequest {
-                id,
-                duration,
-                needed_acks,
-                is_cumulative: cumulative,
-                extra_info,
-            })
-            .group_by(|rq| self.worker_id_for_timeout(rq.id()))
-            .into_iter()
-            .try_for_each(|(worker_id, group)| {
-                self.worker_handles[worker_id].send(WorkerMessage::Requests(group.collect()))
-            })
+        .into_iter()
+        .map(|(id, extra_info)| TimeoutRequest {
+            id,
+            duration,
+            needed_acks,
+            is_cumulative: cumulative,
+            extra_info,
+        })
+        .group_by(|rq| self.worker_id_for_timeout(rq.id()))
+        .into_iter()
+        .try_for_each(|(worker_id, group)| {
+            self.worker_handles[worker_id].send(WorkerMessage::Requests(group.collect()))
+        })
     }
 
-    #[instrument(skip(self), level = "trace")]
+    //#[instrument(skip(self), level = "trace")]
     pub fn ack_received(
         &self,
         timeout_id: TimeoutIdentification,
         from: NodeId,
     ) -> atlas_common::error::Result<()> {
         self.worker_for_timeout(&timeout_id)
-            .send(WorkerMessage::Ack(TimeoutAck {
-                id: timeout_id,
-                from,
-            }))
+        .send(WorkerMessage::Ack(TimeoutAck {
+            id: timeout_id,
+            from,
+        }))
     }
 
-    #[instrument(skip(self, acks), level = "trace", fields(acks = acks.len()))]
+    //#[instrument(skip(self, acks), level = "trace", fields(acks = acks.len()))]
     pub fn acks_received(
         &self,
         acks: Vec<(TimeoutIdentification, NodeId)>,
@@ -212,7 +211,7 @@ impl TimeoutsHandle {
             })
     }
 
-    #[instrument(skip(self), level = "trace")]
+    //#[instrument(skip(self), level = "trace")]
     pub fn cancel_timeout(
         &self,
         timeout: TimeoutIdentification,
@@ -221,7 +220,7 @@ impl TimeoutsHandle {
             .send(WorkerMessage::Cancel(timeout))
     }
 
-    #[instrument(skip(self), level = "trace", fields(cancelled_timeouts = timeouts.len()))]
+    //#[instrument(skip(self), level = "trace", fields(cancelled_timeouts = timeouts.len()))]
     pub fn cancel_timeouts(
         &self,
         timeouts: Vec<TimeoutIdentification>,
@@ -235,20 +234,21 @@ impl TimeoutsHandle {
             })
     }
 
-    #[instrument(skip(self), level = "trace")]
+    //#[instrument(skip(self), level = "trace")]
     pub fn cancel_all_timeouts_for_mod(
         &self,
         mod_name: Arc<str>,
     ) -> atlas_common::error::Result<()> {
         self.worker_handles
-            .iter()
-            .try_for_each(|worker| worker.send(WorkerMessage::CancelAll(mod_name.clone())))
+           .iter()
+           .try_for_each(|worker| worker.send(WorkerMessage::CancelAll(mod_name.clone())))
     }
 
     pub fn reset_all_timeouts_for_mod(
         &self,
         mod_name: Arc<str>,
     ) -> atlas_common::error::Result<()> {
+        
         self.worker_handles
             .iter()
             .try_for_each(|worker| worker.send(WorkerMessage::ResetAll(mod_name.clone())))
@@ -296,6 +296,23 @@ pub trait TimeoutWorkerResponder: Send + Clone {
 }
 
 impl TimeoutRequest {
+    
+    pub fn new(
+        id: TimeoutIdentification,
+        duration: Duration,
+        needed_acks: usize,
+        is_cumulative: bool,
+        extra_info: Option<Box<dyn TimeOutable>>,
+    ) -> Self {
+        Self {
+            id,
+            duration,
+            needed_acks,
+            is_cumulative,
+            extra_info,
+        }
+    }
+    
     pub fn extra_info(&self) -> Option<&dyn TimeOutable> {
         self.extra_info.as_deref()
     }
@@ -332,4 +349,12 @@ impl TimeoutIdentification {
             timeout_id: id,
         }
     }
+}
+
+impl TimeoutAck {
+    
+    pub fn new(id: TimeoutIdentification, from: NodeId) -> Self {
+        Self { id, from }
+    }
+    
 }
