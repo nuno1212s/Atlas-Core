@@ -151,13 +151,13 @@ impl TimeoutsHandle {
         cumulative: bool,
     ) -> atlas_common::error::Result<()> {
         self.worker_for_timeout(&timeout_id)
-        .send(WorkerMessage::Request(TimeoutRequest {
-            id: timeout_id,
-            duration,
-            needed_acks,
-            is_cumulative: cumulative,
-            extra_info,
-        }))
+            .send(WorkerMessage::Request(TimeoutRequest {
+                id: timeout_id,
+                duration,
+                needed_acks,
+                is_cumulative: cumulative,
+                extra_info,
+            }))
     }
 
     //#[instrument(skip(self, timeout_id), level = "trace")]
@@ -169,19 +169,19 @@ impl TimeoutsHandle {
         cumulative: bool,
     ) -> atlas_common::error::Result<()> {
         timeout_id
-        .into_iter()
-        .map(|(id, extra_info)| TimeoutRequest {
-            id,
-            duration,
-            needed_acks,
-            is_cumulative: cumulative,
-            extra_info,
-        })
-        .group_by(|rq| self.worker_id_for_timeout(rq.id()))
-        .into_iter()
-        .try_for_each(|(worker_id, group)| {
-            self.worker_handles[worker_id].send(WorkerMessage::Requests(group.collect()))
-        })
+            .into_iter()
+            .map(|(id, extra_info)| TimeoutRequest {
+                id,
+                duration,
+                needed_acks,
+                is_cumulative: cumulative,
+                extra_info,
+            })
+            .group_by(|rq| self.worker_id_for_timeout(rq.id()))
+            .into_iter()
+            .try_for_each(|(worker_id, group)| {
+                self.worker_handles[worker_id].send(WorkerMessage::Requests(group.collect()))
+            })
     }
 
     //#[instrument(skip(self), level = "trace")]
@@ -191,10 +191,10 @@ impl TimeoutsHandle {
         from: NodeId,
     ) -> atlas_common::error::Result<()> {
         self.worker_for_timeout(&timeout_id)
-        .send(WorkerMessage::Ack(TimeoutAck {
-            id: timeout_id,
-            from,
-        }))
+            .send(WorkerMessage::Ack(TimeoutAck {
+                id: timeout_id,
+                from,
+            }))
     }
 
     //#[instrument(skip(self, acks), level = "trace", fields(acks = acks.len()))]
@@ -240,15 +240,14 @@ impl TimeoutsHandle {
         mod_name: Arc<str>,
     ) -> atlas_common::error::Result<()> {
         self.worker_handles
-           .iter()
-           .try_for_each(|worker| worker.send(WorkerMessage::CancelAll(mod_name.clone())))
+            .iter()
+            .try_for_each(|worker| worker.send(WorkerMessage::CancelAll(mod_name.clone())))
     }
 
     pub fn reset_all_timeouts_for_mod(
         &self,
         mod_name: Arc<str>,
     ) -> atlas_common::error::Result<()> {
-        
         self.worker_handles
             .iter()
             .try_for_each(|worker| worker.send(WorkerMessage::ResetAll(mod_name.clone())))
@@ -296,7 +295,6 @@ pub trait TimeoutWorkerResponder: Send + Clone {
 }
 
 impl TimeoutRequest {
-    
     pub fn new(
         id: TimeoutIdentification,
         duration: Duration,
@@ -312,7 +310,7 @@ impl TimeoutRequest {
             extra_info,
         }
     }
-    
+
     pub fn extra_info(&self) -> Option<&dyn TimeOutable> {
         self.extra_info.as_deref()
     }
@@ -352,9 +350,7 @@ impl TimeoutIdentification {
 }
 
 impl TimeoutAck {
-    
     pub fn new(id: TimeoutIdentification, from: NodeId) -> Self {
         Self { id, from }
     }
-    
 }

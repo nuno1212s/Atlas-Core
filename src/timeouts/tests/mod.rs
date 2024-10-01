@@ -1,10 +1,10 @@
 #![cfg(test)]
 pub mod timeouts_tests {
 
-    pub use crate::timeouts::*;
     pub use crate::timeouts::timeout::*;
     pub use crate::timeouts::worker::*;
-    
+    pub use crate::timeouts::*;
+
     use lazy_static::lazy_static;
     use std::sync::Arc;
     use std::time::Duration;
