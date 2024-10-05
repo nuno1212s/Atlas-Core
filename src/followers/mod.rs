@@ -2,7 +2,7 @@ use crate::messages::Protocol;
 use crate::ordering_protocol::networking::serialize::{
     OrderingProtocolMessage, PermissionedOrderingProtocolMessage,
 };
-use atlas_common::channel::ChannelSyncTx;
+use atlas_common::channel::sync::ChannelSyncTx;
 use atlas_common::globals::ReadOnly;
 use atlas_communication::message::StoredMessage;
 use std::ops::Deref;

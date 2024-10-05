@@ -5,7 +5,7 @@ use std::ptr::write;
 use std::sync::Arc;
 use tracing::instrument;
 
-use atlas_common::channel::{ChannelSyncRx, ChannelSyncTx};
+use atlas_common::channel::sync::{ChannelSyncRx, ChannelSyncTx};
 use atlas_common::crypto::threshold_crypto::{PrivateKeyPart, PublicKeyPart, PublicKeySet};
 use atlas_common::error::*;
 use atlas_common::node_id::NodeId;

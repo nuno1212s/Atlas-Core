@@ -9,7 +9,7 @@ use dyn_clone::DynClone;
 use getset::{CopyGetters, Getters};
 use itertools::Itertools;
 
-use atlas_common::channel::{new_bounded_sync, ChannelSyncTx};
+use atlas_common::channel::sync::{new_bounded_sync, ChannelSyncTx};
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::SeqNo;
 
