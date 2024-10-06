@@ -177,7 +177,7 @@ impl TimeoutsHandle {
                 is_cumulative: cumulative,
                 extra_info,
             })
-            .group_by(|rq| self.worker_id_for_timeout(rq.id()))
+            .chunk_by(|rq| self.worker_id_for_timeout(rq.id()))
             .into_iter()
             .try_for_each(|(worker_id, group)| {
                 self.worker_handles[worker_id].send(WorkerMessage::Requests(group.collect()))
@@ -204,7 +204,7 @@ impl TimeoutsHandle {
     ) -> atlas_common::error::Result<()> {
         acks.into_iter()
             .map(|(id, from)| TimeoutAck { id, from })
-            .group_by(|ack| self.worker_id_for_timeout(ack.id()))
+            .chunk_by(|ack| self.worker_id_for_timeout(ack.id()))
             .into_iter()
             .try_for_each(|(worker_id, group)| {
                 self.worker_handles[worker_id].send(WorkerMessage::Acks(group.collect()))
@@ -227,7 +227,7 @@ impl TimeoutsHandle {
     ) -> atlas_common::error::Result<()> {
         timeouts
             .into_iter()
-            .group_by(|timeout| self.worker_id_for_timeout(timeout))
+            .chunk_by(|timeout| self.worker_id_for_timeout(timeout))
             .into_iter()
             .try_for_each(|(worker_id, group)| {
                 self.worker_handles[worker_id].send(WorkerMessage::CancelMultiple(group.collect()))

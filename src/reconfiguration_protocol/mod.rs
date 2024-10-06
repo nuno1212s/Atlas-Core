@@ -1,9 +1,7 @@
 #![allow(type_alias_bounds)]
 
 use std::fmt::{Debug, Formatter};
-use std::ptr::write;
 use std::sync::Arc;
-use tracing::instrument;
 
 use atlas_common::channel::sync::{ChannelSyncRx, ChannelSyncTx};
 use atlas_common::crypto::threshold_crypto::{PrivateKeyPart, PublicKeyPart, PublicKeySet};
@@ -16,7 +14,6 @@ use atlas_communication::stub::RegularNetworkStub;
 
 use crate::serialize::ReconfigurationProtocolMessage;
 use crate::timeouts::timeout::{ModTimeout, TimeoutModHandle, TimeoutableMod};
-use crate::timeouts::{Timeout, TimeoutsHandle};
 
 /// Messages to be sent by the reconfiguration protocol
 /// to the ordering protocol relating changes that have undergone in the

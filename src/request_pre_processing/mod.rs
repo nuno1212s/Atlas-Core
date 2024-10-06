@@ -3,7 +3,6 @@ use std::time::{Duration, Instant};
 use std::vec::IntoIter;
 
 use atlas_common::channel::mixed::ChannelMixedRx;
-use atlas_common::channel::oneshot::OneShotRx;
 use atlas_common::channel::sync::{ChannelSyncRx, ChannelSyncTx};
 use atlas_common::channel::{RecvError, TryRecvError};
 use atlas_common::error::Result;

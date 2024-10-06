@@ -8,7 +8,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, SystemTimeError};
 
-use crate::request_pre_processing::{operation_key, operation_key_raw};
 use atlas_common::channel::sync::ChannelSyncRx;
 use atlas_common::channel::TryRecvError;
 use atlas_common::collections::HashMap;
@@ -283,25 +282,25 @@ where
 
             requests
                 .iter()
-                .for_each(|(rq_id, rq)| rq.borrow_mut().timed_out());
+                .for_each(|(_rq_id, rq)| rq.borrow_mut().timed_out());
 
             let (cumulative_stream, non_cumulative_stream): (Vec<_>, Vec<_>) = requests
                 .iter()
-                .partition(|(rq_id, rq)| rq.borrow().request().is_cumulative());
+                .partition(|(_rq_id, rq)| rq.borrow().request().is_cumulative());
 
             // Re register the cumulative timeouts for the next timeout
             cumulative_stream
                 .into_iter()
-                .try_for_each(|(rq_id, rq)| self.re_register_timeout(rq.clone()))?;
+                .try_for_each(|(_rq_id, rq)| self.re_register_timeout(rq.clone()))?;
 
             // Remove the non-cumulative ones from the watched list
-            non_cumulative_stream.into_iter().for_each(|(rq_id, rq)| {
+            non_cumulative_stream.into_iter().for_each(|(rq_id, _rq)| {
                 self.watched_requests.remove(rq_id);
             });
 
             let mut partial_timeouts = requests
                 .into_iter()
-                .map(|(rq_id, rq)| {
+                .map(|(_rq_id, rq)| {
                     let rq_borrow = rq.borrow();
 
                     let extra_info = rq_borrow
@@ -337,7 +336,7 @@ where
             .retain(|k, _v| !Arc::ptr_eq(k.mod_id(), &mod_name));
 
         self.pending_timeout_heap.iter_mut().for_each(|(_, v)| {
-            v.retain(|k, rq| !Arc::ptr_eq(rq.borrow().request().id().mod_id(), &mod_name))
+            v.retain(|_k, rq| !Arc::ptr_eq(rq.borrow().request().id().mod_id(), &mod_name))
         });
 
         Ok(())
@@ -348,13 +347,13 @@ where
             .pending_timeout_heap
             .values_mut()
             .flat_map(|timeouts| {
-                timeouts.extract_if(|rq_id, rq| {
+                timeouts.extract_if(|_rq_id, rq| {
                     Arc::ptr_eq(rq.borrow().request().id().mod_id(), &mod_name)
                 })
             })
             .collect();
 
-        removed_timeouts.iter_mut().for_each(|(timeout_id, rq)| {
+        removed_timeouts.iter_mut().for_each(|(_timeout_id, rq)| {
             let mut timeout_ref = rq.borrow_mut();
 
             timeout_ref.timeout_phase = TimeoutPhase::NeverTimedOut;
