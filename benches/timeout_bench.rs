@@ -29,7 +29,7 @@ impl TimeoutWorkerResponder for MockWR {
 
 #[divan::bench(args= [1000, 10000, 100000])]
 fn benchmark_timeout(bencher: divan::Bencher, requests: u32) {
-    let (_c, channel) = channel::new_bounded_sync(1, Some("TimeoutWorker"));
+    let (_c, channel) = channel::sync::new_bounded_sync(1, Some("TimeoutWorker"));
 
     let mut worker = TimeoutWorker::new(NodeId(0), 0, *DEFAULT_TIMEOUT, channel, MockWR);
 
