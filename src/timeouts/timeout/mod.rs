@@ -171,3 +171,14 @@ impl From<Timeout> for ModTimeout {
         }
     }
 }
+
+impl Clone for ModTimeout {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id.clone(),
+            timeout_count: self.timeout_count,
+            timeout_time: self.timeout_time,
+            extra_info: None
+        }
+    }
+}

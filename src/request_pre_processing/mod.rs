@@ -87,7 +87,9 @@ pub trait RequestClientPreProcessing {
     fn reset_client(&self, client_id: NodeId) -> Result<()>;
 }
 
-pub type PreProcessorOutput<O> = (PreProcessorOutputMessage<O>, Instant);
+pub struct PreProcessorOutputSt<O>(pub PreProcessorOutputMessage<O>, pub Instant);
+
+pub type PreProcessorOutput<O> = PreProcessorOutputSt<O>;
 
 pub struct BatchOutput<O>(ChannelSyncRx<PreProcessorOutput<O>>);
 
@@ -149,7 +151,8 @@ impl<O> Deref for BatchOutput<O> {
 
 impl<O> BatchOutput<O> {
     pub fn recv(&self) -> std::result::Result<PreProcessorOutputMessage<O>, RecvError> {
-        let (message, instant) = self.0.recv().unwrap();
+        let (message, instant) = self.0.recv()
+            .map_err(|_| RecvError::ChannelDc)?.into();
 
         metric_duration(RQ_PP_WORKER_PROPOSER_PASSING_TIME_ID, instant.elapsed());
 
@@ -157,7 +160,7 @@ impl<O> BatchOutput<O> {
     }
 
     pub fn try_recv(&self) -> std::result::Result<PreProcessorOutputMessage<O>, TryRecvError> {
-        let (message, instant) = self.0.try_recv()?;
+        let (message, instant) = self.0.try_recv()?.into();
 
         metric_duration(RQ_PP_WORKER_PROPOSER_PASSING_TIME_ID, instant.elapsed());
 
@@ -168,7 +171,7 @@ impl<O> BatchOutput<O> {
         &self,
         timeout: Duration,
     ) -> std::result::Result<PreProcessorOutputMessage<O>, TryRecvError> {
-        let (message, instant) = self.0.recv_timeout(timeout)?;
+        let (message, instant) = self.0.recv_timeout(timeout)?.into();
 
         metric_duration(RQ_PP_WORKER_PROPOSER_PASSING_TIME_ID, instant.elapsed());
 
@@ -207,5 +210,25 @@ pub fn operation_key_raw(from: NodeId, session: SeqNo) -> u64 {
 impl<O> Clone for BatchOutput<O> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
+    }
+}
+
+impl<O> From<PreProcessorOutputSt<O>> for (PreProcessorOutputMessage<O>, Instant) {
+    fn from(value: PreProcessorOutputSt<O>) -> Self {
+        (value.0, value.1)
+    }
+}
+
+impl<O: Clone> Clone for PreProcessorOutputMessage<O> {
+    fn clone(&self) -> Self {
+        Self {
+            deduped_requests: self.deduped_requests.clone(),
+        }
+    }
+}
+
+impl<O> Clone for PreProcessorOutputSt<O> where O: Clone {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), self.1)
     }
 }
