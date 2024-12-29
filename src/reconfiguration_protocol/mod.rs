@@ -181,10 +181,10 @@ pub trait ReconfigurationProtocol:
 /// Threshold crypto information about the current network
 pub trait QuorumThresholdCrypto: Send + Sync {
     /// Get our own public key part
-    fn own_pub_key(&self) -> Result<PublicKeyPart>;
+    fn own_pub_key(&self) -> PublicKeyPart;
 
     /// Get the public key part that corresponds to a given node
-    fn pub_key_for_node(&self, node: NodeId) -> Result<PublicKeyPart>;
+    fn pub_key_for_node(&self, node: NodeId) -> PublicKeyPart;
 
     /// The set of public key, generated collaboratively by the quorum
     fn pub_key_set(&self) -> Result<&PublicKeySet>;
