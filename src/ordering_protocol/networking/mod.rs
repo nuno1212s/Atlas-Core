@@ -30,7 +30,7 @@ where
         Self: Sized;
 }
 
-pub trait OrderProtocolSendNode<RQ, OPM>: Send + Sync
+pub trait OrderProtocolSendNode<RQ, OPM>: Send + Sync + 'static
 where
     RQ: SerType,
     OPM: OrderingProtocolMessage<RQ>,
@@ -43,11 +43,12 @@ where
     fn network_info_provider(&self) -> &Arc<Self::NetworkInfoProvider>;
 
     /// Forward requests to the given targets
-    fn forward_requests(
+    fn forward_requests<I>(
         &self,
         fwd_requests: ForwardedRequestsMessage<RQ>,
-        targets: impl Iterator<Item = NodeId>,
-    ) -> std::result::Result<(), Vec<NodeId>>;
+        targets: I,
+    ) -> std::result::Result<(), Vec<NodeId>>
+    where I: Iterator<Item = NodeId>;
 
     /// Sends a message to a given target.
     /// Does not block on the message sent. Returns a result that is
@@ -66,21 +67,23 @@ where
     /// Does not block on the message sent. Returns a result that is
     /// Ok if there is a current connection to the targets or err if not. No other checks are made
     /// on the success of the message dispatch
-    fn broadcast(
+    fn broadcast<I>(
         &self,
         message: OPM::ProtocolMessage,
-        targets: impl Iterator<Item = NodeId>,
-    ) -> std::result::Result<(), Vec<NodeId>>;
+        targets: I,
+    ) -> std::result::Result<(), Vec<NodeId>>
+    where I: Iterator<Item = NodeId>;
 
     /// Broadcast a signed message for all of the given targets
     /// Does not block on the message sent. Returns a result that is
     /// Ok if there is a current connection to the targets or err if not. No other checks are made
     /// on the success of the message dispatch
-    fn broadcast_signed(
+    fn broadcast_signed<I>(
         &self,
         message: OPM::ProtocolMessage,
-        targets: impl Iterator<Item = NodeId>,
-    ) -> std::result::Result<(), Vec<NodeId>>;
+        targets: I,
+    ) -> std::result::Result<(), Vec<NodeId>>
+    where I: Iterator<Item = NodeId>;
 
     /// Serialize a message to a given target.
     /// Creates the serialized byte buffer along with the header, so we can send it later.

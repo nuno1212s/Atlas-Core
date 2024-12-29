@@ -38,7 +38,7 @@ pub type View<POP: PermissionedOrderingProtocolMessage> =
     <POP as PermissionedOrderingProtocolMessage>::ViewInfo;
 pub type ShareableConsensusMessage<RQ, OP> =
     Arc<ReadOnly<StoredMessage<<OP as OrderingProtocolMessage<RQ>>::ProtocolMessage>>>;
-pub type ShareableMessage<P> = Arc<ReadOnly<StoredMessage<P>>>;
+pub type ShareableMessage<P> = Arc<StoredMessage<P>>;
 
 pub type ProtocolMessage<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProtocolMessage;
 pub type DecisionMetadata<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProofMetadata;
@@ -534,10 +534,7 @@ impl<O> ProtocolConsensusDecision<O> {
 
 /// Unwrap a shareable message, avoiding cloning at all costs
 pub fn unwrap_shareable_message<T: Clone>(message: ShareableMessage<T>) -> StoredMessage<T> {
-    match Arc::try_unwrap(message) {
-        Ok(msg) => msg.into_inner(),
-        Err(pointer) => (**pointer).clone(),
-    }
+    Arc::try_unwrap(message).unwrap_or_else(|pointer| (*pointer).clone())
 }
 
 impl<O> Orderable for ProtocolConsensusDecision<O> {
