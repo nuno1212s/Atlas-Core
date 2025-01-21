@@ -8,10 +8,7 @@ use atlas_communication::reconfiguration::NetworkInformationProvider;
 use crate::ordering_protocol::networking::serialize::{
     OrderProtocolProof, OrderProtocolVerificationHelper, OrderingProtocolMessage,
 };
-use crate::ordering_protocol::{
-    DecisionMetadata, OrderingProtocol, ProtocolConsensusDecision, ProtocolMessage,
-    ShareableConsensusMessage,
-};
+use crate::ordering_protocol::{DecisionAD, DecisionMetadata, OrderingProtocol, ProtocolConsensusDecision, ProtocolMessage, ShareableConsensusMessage};
 
 /// The trait to define the necessary methods and data types for this order protocol
 /// to be compatible with the decision log
@@ -45,6 +42,7 @@ pub trait PersistentOrderProtocolTypes<RQ, OPM>: Send + Sync + 'static {
 
 pub type DecomposedProof<'a, RQ, OPM> = (
     &'a DecisionMetadata<RQ, OPM>,
+    Vec<&'a DecisionAD<RQ, OPM>>,
     Vec<&'a StoredMessage<ProtocolMessage<RQ, OPM>>>,
 );
 
@@ -67,12 +65,14 @@ where
     /// Initialize a proof from the metadata and messages stored in persistent storage
     fn init_proof_from(
         metadata: DecisionMetadata<RQ, OPM>,
+        additional_data: Vec<DecisionAD<RQ, OPM>>,
         messages: Vec<StoredMessage<ProtocolMessage<RQ, OPM>>>,
     ) -> Result<PProof<RQ, OPM, POP>>;
 
     /// Initialize a proof from the metadata and messages stored by the decision log
     fn init_proof_from_scm(
         metadata: DecisionMetadata<RQ, OPM>,
+        additional_data: Vec<DecisionAD<RQ, OPM>>,
         messages: Vec<ShareableConsensusMessage<RQ, OPM>>,
     ) -> Result<PProof<RQ, OPM, POP>>;
 

@@ -43,7 +43,6 @@ pub type ShareableMessage<P> = Arc<StoredMessage<P>>;
 
 pub type ProtocolMessage<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::ProtocolMessage;
 pub type DecisionMetadata<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::DecisionMetadata;
-
 pub type DecisionAD<RQ, OP> = <OP as OrderingProtocolMessage<RQ>>::DecisionAdditionalInfo;
 
 /// The arguments that are necessary for the ordering protocol to be initialized
