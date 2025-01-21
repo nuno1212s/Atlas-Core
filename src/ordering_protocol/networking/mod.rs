@@ -48,7 +48,8 @@ where
         fwd_requests: ForwardedRequestsMessage<RQ>,
         targets: I,
     ) -> std::result::Result<(), Vec<NodeId>>
-    where I: Iterator<Item = NodeId>;
+    where
+        I: Iterator<Item = NodeId>;
 
     /// Sends a message to a given target.
     /// Does not block on the message sent. Returns a result that is
@@ -72,7 +73,8 @@ where
         message: OPM::ProtocolMessage,
         targets: I,
     ) -> std::result::Result<(), Vec<NodeId>>
-    where I: Iterator<Item = NodeId>;
+    where
+        I: Iterator<Item = NodeId>;
 
     /// Broadcast a signed message for all of the given targets
     /// Does not block on the message sent. Returns a result that is
@@ -83,7 +85,8 @@ where
         message: OPM::ProtocolMessage,
         targets: I,
     ) -> std::result::Result<(), Vec<NodeId>>
-    where I: Iterator<Item = NodeId>;
+    where
+        I: Iterator<Item = NodeId>;
 
     /// Serialize a message to a given target.
     /// Creates the serialized byte buffer along with the header, so we can send it later.

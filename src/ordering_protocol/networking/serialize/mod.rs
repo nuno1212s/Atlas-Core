@@ -77,7 +77,10 @@ pub trait OrderingProtocolMessage<RQ>: Send + Sync + 'static {
     /// The metadata type for storing the proof in the persistent storage
     /// Since the message will be stored in the persistent storage, it needs to be serializable
     /// This should provide all the necessary final information to assemble the proof from the messages
-    type ProofMetadata: Orderable + SerType;
+    type DecisionMetadata: Orderable + SerType;
+
+    /// Along with the decision metadata, the
+    type DecisionAdditionalInfo: SerType + Eq;
 
     /// Verification helper for the ordering protocol
     fn internally_verify_message<NI, OPVH>(

@@ -178,7 +178,7 @@ impl Clone for ModTimeout {
             id: self.id.clone(),
             timeout_count: self.timeout_count,
             timeout_time: self.timeout_time,
-            extra_info: None
+            extra_info: None,
         }
     }
 }

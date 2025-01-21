@@ -151,8 +151,7 @@ impl<O> Deref for BatchOutput<O> {
 
 impl<O> BatchOutput<O> {
     pub fn recv(&self) -> std::result::Result<PreProcessorOutputMessage<O>, RecvError> {
-        let (message, instant) = self.0.recv()
-            .map_err(|_| RecvError::ChannelDc)?.into();
+        let (message, instant) = self.0.recv().map_err(|_| RecvError::ChannelDc)?.into();
 
         metric_duration(RQ_PP_WORKER_PROPOSER_PASSING_TIME_ID, instant.elapsed());
 
@@ -227,7 +226,10 @@ impl<O: Clone> Clone for PreProcessorOutputMessage<O> {
     }
 }
 
-impl<O> Clone for PreProcessorOutputSt<O> where O: Clone {
+impl<O> Clone for PreProcessorOutputSt<O>
+where
+    O: Clone,
+{
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1)
     }
