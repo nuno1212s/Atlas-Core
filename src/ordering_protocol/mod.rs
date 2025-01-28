@@ -24,7 +24,7 @@ use atlas_common::maybe_vec::ordered::{MaybeOrderedVec, MaybeOrderedVecBuilder};
 use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
-use atlas_common::serialization_helper::SerType;
+use atlas_common::serialization_helper::SerMsg;
 use atlas_communication::message::StoredMessage;
 use atlas_metrics::benchmarks::BatchMeta;
 use getset::Getters;
@@ -82,11 +82,9 @@ pub type OPExResult<RQ, SER> =
 /// into a globally accepted order in a fault tolerant scenario, which is can then be used by FT applications
 ///
 /// The generic type presented here is the type of the request that the ordering protocol will be ordering
-/// This can be whatever the developer wants, as long as it implements the [SerType] trait
+/// This can be whatever the developer wants, as long as it implements the [SerMsg] trait
 pub trait OrderingProtocol<RQ>:
     OrderProtocolTolerance + Orderable + TimeoutableMod<OPExResult<RQ, Self::Serialization>>
-where
-    RQ: SerType,
 {
     /// The type which implements OrderingProtocolMessage, to be implemented by the developer
     type Serialization: OrderingProtocolMessage<RQ> + 'static;
@@ -684,6 +682,12 @@ impl<DAD, PM> PartialDecisionInformation<DAD, PM> {
             message_partial_info,
             messages,
         }
+    }
+}
+
+impl<DAD, PM> From<PartialDecisionInformation<DAD, PM>> for (MaybeVec<DAD>, MaybeVec<Arc<StoredMessage<PM>>>) {
+    fn from(value: PartialDecisionInformation<DAD, PM>) -> Self {
+        (value.message_partial_info, value.messages)
     }
 }
 

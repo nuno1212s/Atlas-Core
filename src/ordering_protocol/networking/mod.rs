@@ -4,7 +4,7 @@ use std::sync::Arc;
 use atlas_common::crypto::hash::Digest;
 use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
-use atlas_common::serialization_helper::SerType;
+use atlas_common::serialization_helper::SerMsg;
 use atlas_communication::message::{SerializedMessage, StoredSerializedMessage};
 use atlas_communication::reconfiguration::NetworkInformationProvider;
 
@@ -20,7 +20,7 @@ pub mod signature_ver;
 /// The networking order protocol
 pub trait NetworkedOrderProtocolInitializer<RQ, RP, NT>: OrderingProtocol<RQ>
 where
-    RQ: SerType,
+    RQ: SerMsg,
 {
     fn initialize(
         config: Self::Config,
@@ -32,7 +32,7 @@ where
 
 pub trait OrderProtocolSendNode<RQ, OPM>: Send + Sync + 'static
 where
-    RQ: SerType,
+    RQ: SerMsg,
     OPM: OrderingProtocolMessage<RQ>,
 {
     type NetworkInfoProvider: NetworkInformationProvider + 'static;

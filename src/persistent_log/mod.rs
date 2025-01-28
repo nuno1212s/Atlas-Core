@@ -1,10 +1,10 @@
 use crate::ordering_protocol::networking::serialize::{
     OrderingProtocolMessage, PermissionedOrderingProtocolMessage,
 };
-use crate::ordering_protocol::{DecisionMetadata, ShareableConsensusMessage, View};
+use crate::ordering_protocol::{DecisionAD, DecisionMetadata, ShareableConsensusMessage, View};
 use atlas_common::error::*;
 use atlas_common::ordering::SeqNo;
-use atlas_common::serialization_helper::SerType;
+use atlas_common::serialization_helper::SerMsg;
 
 /// How should the data be written and response delivered?
 /// If Sync is chosen the function will block on the call and return the result of the operation
@@ -23,7 +23,7 @@ pub trait PersistableStateTransferProtocol {}
 /// The trait necessary for a persistent log protocol to be used as the persistent log layer
 pub trait OrderingProtocolLog<RQ, OP>: Clone
 where
-    RQ: SerType,
+    RQ: SerMsg,
     OP: OrderingProtocolMessage<RQ>,
 {
     /// Write to the persistent log the latest committed sequence number
@@ -42,6 +42,13 @@ where
         &self,
         write_mode: OperationMode,
         metadata: DecisionMetadata<RQ, OP>,
+    ) -> Result<()>;
+    
+    /// Write the additional data for a given proof to the persistent log
+    fn write_decision_additional_data(
+        &self,
+        write_mode: OperationMode,
+        additional_data: DecisionAD<RQ, OP>
     ) -> Result<()>;
 
     /// Invalidate all messages with sequence number equal to the given one

@@ -1,7 +1,7 @@
 use atlas_common::error::*;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::Orderable;
-use atlas_common::serialization_helper::SerType;
+use atlas_common::serialization_helper::SerMsg;
 use atlas_communication::message::Header;
 use atlas_communication::reconfiguration::NetworkInformationProvider;
 use std::fmt::Debug;
@@ -28,7 +28,7 @@ pub trait OrderProtocolProof: Orderable {
 }
 
 pub trait PermissionedOrderingProtocolMessage: Send + Sync {
-    type ViewInfo: NetworkView + SerType;
+    type ViewInfo: NetworkView + SerMsg;
 }
 
 /// The signature verification helper for the ordering protocol
@@ -56,7 +56,7 @@ where
 /// the view transfer protocol messages
 pub trait ViewTransferProtocolMessage: Send + Sync {
     /// The general protocol type for all messages in the View Transfer protocol
-    type ProtocolMessage: SerType;
+    type ProtocolMessage: SerMsg;
 
     /// Verification helper for the ordering protocol
     fn internally_verify_message<NI>(
@@ -72,15 +72,15 @@ pub trait ViewTransferProtocolMessage: Send + Sync {
 /// The abstraction for ordering protocol messages.
 pub trait OrderingProtocolMessage<RQ>: Send + Sync + 'static {
     /// The general protocol type for all messages in the ordering protocol
-    type ProtocolMessage: Orderable + SerType;
+    type ProtocolMessage: Orderable + SerMsg;
 
     /// The metadata type for storing the proof in the persistent storage
     /// Since the message will be stored in the persistent storage, it needs to be serializable
     /// This should provide all the necessary final information to assemble the proof from the messages
-    type DecisionMetadata: Orderable + SerType;
+    type DecisionMetadata: Orderable + SerMsg;
 
     /// Along with the decision metadata, the
-    type DecisionAdditionalInfo: SerType + Eq;
+    type DecisionAdditionalInfo: SerMsg + Eq;
 
     /// Verification helper for the ordering protocol
     fn internally_verify_message<NI, OPVH>(

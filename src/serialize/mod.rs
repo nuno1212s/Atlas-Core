@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
-use atlas_common::serialization_helper::SerType;
+use atlas_common::serialization_helper::SerMsg;
 use atlas_communication::message::Header;
 use atlas_communication::reconfiguration::NetworkInformationProvider;
 use atlas_communication::serialization::{InternalMessageVerifier, Serializable};
@@ -18,7 +18,7 @@ pub mod capnp;
 
 /// Reconfiguration protocol messages
 pub trait ReconfigurationProtocolMessage: Serializable + Send + Sync {
-    type QuorumJoinCertificate: SerType;
+    type QuorumJoinCertificate: SerMsg;
 }
 
 #[cfg_attr(feature = "serialize_serde", derive(Serialize, Deserialize))]
