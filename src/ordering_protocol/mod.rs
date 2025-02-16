@@ -310,7 +310,10 @@ impl<MD, DAD, P, O> Decision<MD, DAD, P, O> {
         metadata: MD,
         additional_data: MaybeVec<DAD>,
         messages: MaybeVec<ShareableMessage<P>>,
-    ) -> Self where DAD: PartialEq {
+    ) -> Self
+    where
+        DAD: PartialEq,
+    {
         let mut decision_info = BTreeSet::new();
 
         decision_info.insert(DecisionInfo::DecisionMetadata(metadata));
@@ -339,7 +342,10 @@ impl<MD, DAD, P, O> Decision<MD, DAD, P, O> {
         additional_metric_data: MaybeVec<DAD>,
         messages: MaybeVec<ShareableMessage<P>>,
         requests: ProtocolConsensusDecision<O>,
-    ) -> Self where DAD: PartialEq {
+    ) -> Self
+    where
+        DAD: PartialEq,
+    {
         let mut decision_info = BTreeSet::new();
 
         decision_info.insert(DecisionInfo::DecisionMetadata(metadata));
@@ -356,7 +362,10 @@ impl<MD, DAD, P, O> Decision<MD, DAD, P, O> {
 
     /// Merge two decisions by appending one to the other
     /// Returns an error when the sequence number of the decisions does not match
-    pub fn merge_decisions(&mut self, other: Self) -> Result<()> where DAD: PartialEq {
+    pub fn merge_decisions(&mut self, other: Self) -> Result<()>
+    where
+        DAD: PartialEq,
+    {
         if self.seq != other.seq {
             return Err(anyhow!(
                 "The decisions have different sequence numbers, cannot merge"
@@ -378,7 +387,10 @@ impl<MD, DAD, P, O> Decision<MD, DAD, P, O> {
         Ok(())
     }
 
-    pub fn append_decision_info(&mut self, decision_info: DecisionInfo<MD, DAD, P, O>) where DAD: PartialEq {
+    pub fn append_decision_info(&mut self, decision_info: DecisionInfo<MD, DAD, P, O>)
+    where
+        DAD: PartialEq,
+    {
         self.decision_info = {
             let decisions = std::mem::replace(&mut self.decision_info, MaybeOrderedVec::None);
 
@@ -685,7 +697,9 @@ impl<DAD, PM> PartialDecisionInformation<DAD, PM> {
     }
 }
 
-impl<DAD, PM> From<PartialDecisionInformation<DAD, PM>> for (MaybeVec<DAD>, MaybeVec<Arc<StoredMessage<PM>>>) {
+impl<DAD, PM> From<PartialDecisionInformation<DAD, PM>>
+    for (MaybeVec<DAD>, MaybeVec<Arc<StoredMessage<PM>>>)
+{
     fn from(value: PartialDecisionInformation<DAD, PM>) -> Self {
         (value.message_partial_info, value.messages)
     }

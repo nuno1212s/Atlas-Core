@@ -23,7 +23,6 @@ where
 {
     /// The required data types for working with the decision log
     type PersistableTypes: PersistentOrderProtocolTypes<RQ, Self::Serialization> + 'static;
-
 }
 
 pub trait OrderProtocolLogHelper<RQ, OP, PT>: 'static + Send

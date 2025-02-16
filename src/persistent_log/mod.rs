@@ -43,12 +43,12 @@ where
         write_mode: OperationMode,
         metadata: DecisionMetadata<RQ, OP>,
     ) -> Result<()>;
-    
+
     /// Write the additional data for a given proof to the persistent log
     fn write_decision_additional_data(
         &self,
         write_mode: OperationMode,
-        additional_data: DecisionAD<RQ, OP>
+        additional_data: DecisionAD<RQ, OP>,
     ) -> Result<()>;
 
     /// Invalidate all messages with sequence number equal to the given one
