@@ -227,7 +227,7 @@ impl TimeoutsHandle {
     ) -> atlas_common::error::Result<()> {
         timeouts
             .into_iter()
-            .group_by(|timeout| self.worker_id_for_timeout(timeout))
+            .chunk_by(|timeout| self.worker_id_for_timeout(timeout))
             .into_iter()
             .try_for_each(|(worker_id, group)| {
                 self.worker_handles[worker_id].send(WorkerMessage::CancelMultiple(group.collect()))
