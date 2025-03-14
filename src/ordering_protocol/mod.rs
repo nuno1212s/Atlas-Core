@@ -655,6 +655,14 @@ impl<RQ> BatchedDecision<RQ> {
             meta: None,
         }
     }
+    
+    pub fn new_with_batch(seq: SeqNo, batch: Vec<StoredMessage<RQ>>) -> Self {
+        BatchedDecision {
+            seq,
+            inner: batch,
+            meta: None,
+        }
+    }
 
     pub fn into_inner(self) -> Vec<StoredMessage<RQ>> {
         self.inner
