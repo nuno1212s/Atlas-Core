@@ -31,3 +31,8 @@ dyn-clone = "*"
 itertools = "*"
 
 tracing = "*"
+
+[dev-dependencies]
+divan = "*"
+tracing-appender = "*"
+tracing-subscriber = "*"

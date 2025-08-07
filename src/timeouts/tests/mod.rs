@@ -5,8 +5,8 @@ pub mod timeouts_tests {
     pub use crate::timeouts::worker::*;
     pub use crate::timeouts::*;
 
-    use lazy_static::lazy_static;
     use std::sync::Arc;
+    use std::sync::LazyLock;
     use std::time::Duration;
     use tracing_appender::non_blocking::WorkerGuard;
 
@@ -17,18 +17,18 @@ pub mod timeouts_tests {
     const OUR_ID: NodeId = NodeId(0);
     const ID_1: NodeId = NodeId(1);
 
-    lazy_static! {
-        static ref MOD_NAME: Arc<str> = Arc::from("TestMod");
-        static ref IDS: Vec<NodeId> = vec![OUR_ID, ID_1];
-        static ref TIMEOUT_IDS: Vec<TimeoutIdentification> = vec![TimeoutIdentification {
+    static MOD_NAME: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from("TestMod"));
+    static IDS: LazyLock<Vec<NodeId>> = LazyLock::new(|| vec![OUR_ID, ID_1]);
+    static TIMEOUT_IDS: LazyLock<Vec<TimeoutIdentification>> = LazyLock::new(|| {
+        vec![TimeoutIdentification {
             mod_id: MOD_NAME.clone(),
             timeout_id: TimeoutID::SessionBased {
                 session: SeqNo::ZERO,
                 seq_no: SeqNo::ZERO,
                 from: OUR_ID,
             },
-        },];
-    }
+        }]
+    });
 
     fn setup_tracing_subscriber() -> WorkerGuard {
         let (console_nb, guard_3) = tracing_appender::non_blocking(std::io::stdout());
@@ -84,7 +84,7 @@ pub mod timeouts_tests {
     }
 
     fn start_timeout(timeout_id: TimeoutIdentification, handle: &TimeoutsHandle) {
-        start_timeout_with(handle, timeout_id, 1, false)
+        start_timeout_with(handle, timeout_id, 1, false);
     }
 
     fn ack_timeout(timeout_id: TimeoutIdentification, from: NodeId, handle: &TimeoutsHandle) {

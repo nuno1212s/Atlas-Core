@@ -7,14 +7,11 @@ use atlas_core::timeouts::worker::TimeoutWorker;
 use atlas_core::timeouts::{
     TimeoutAck, TimeoutIdentification, TimeoutRequest, TimeoutWorkerResponder,
 };
-use lazy_static::lazy_static;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
-lazy_static! {
-    static ref MOD_NAME: Arc<str> = Arc::from("TestMod");
-    static ref DEFAULT_TIMEOUT: Duration = Duration::from_secs(1);
-}
+static MOD_NAME: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from("TestMod"));
+static DEFAULT_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| Duration::from_secs(1));
 
 const NEEDED_ACKS: usize = 3;
 
@@ -27,7 +24,7 @@ impl TimeoutWorkerResponder for MockWR {
     }
 }
 
-#[divan::bench(args= [1000, 10000, 100000])]
+#[divan::bench(args= [1000, 10000, 100_000])]
 fn benchmark_timeout(bencher: divan::Bencher, requests: u32) {
     let (_c, channel) = channel::sync::new_bounded_sync(1, Some("TimeoutWorker"));
 
@@ -61,15 +58,15 @@ fn benchmark_timeout(bencher: divan::Bencher, requests: u32) {
                     .expect("Failed to handle timeout request");
             });
 
-        rqs.iter().for_each(|timeout_id| {
+        for timeout_id in &rqs {
             (0..NEEDED_ACKS).for_each(|id| {
-                let ack = TimeoutAck::new(timeout_id.clone(), NodeId(id as u32));
+                let ack = TimeoutAck::new(timeout_id.clone(), NodeId::from(id));
 
                 worker
                     .handle_timeout_ack(ack)
                     .expect("Failed to ack timeout");
             });
-        });
+        }
     });
 }
 
