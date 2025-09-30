@@ -78,7 +78,7 @@ pub(super) fn initialize_worker_thread<WR>(
     WR: TimeoutWorkerResponder + 'static,
 {
     std::thread::Builder::new()
-        .name(format!("TimeoutWorker-{}", worker_id))
+        .name(format!("TimeoutWorker-{worker_id}"))
         .spawn(move || {
             let mut worker = TimeoutWorker {
                 our_node_id: our_id,
@@ -92,7 +92,7 @@ pub(super) fn initialize_worker_thread<WR>(
 
             loop {
                 if let Err(err) = worker.run() {
-                    error!("Timeout worker error: {:?}", err);
+                    error!("Timeout worker error: {err:?}");
                 }
             }
         })
@@ -299,8 +299,8 @@ where
             });
 
             let mut partial_timeouts = requests
-                .into_iter()
-                .map(|(_rq_id, rq)| {
+                .into_values()
+                .map(|rq| {
                     let rq_borrow = rq.borrow();
 
                     let extra_info = rq_borrow

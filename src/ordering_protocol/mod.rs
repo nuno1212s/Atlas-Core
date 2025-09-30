@@ -13,22 +13,18 @@ use crate::messages::ClientRqInfo;
 use crate::ordering_protocol::networking::serialize::{
     OrderingProtocolMessage, PermissionedOrderingProtocolMessage,
 };
-use crate::ordering_protocol::ExecutionResult::Nil;
 use crate::request_pre_processing::BatchOutput;
 use crate::timeouts::timeout::{TimeoutModHandle, TimeoutableMod};
 use anyhow::anyhow;
 use atlas_common::crypto::hash::Digest;
 use atlas_common::error::*;
-use atlas_common::globals::ReadOnly;
 use atlas_common::maybe_vec::ordered::{MaybeOrderedVec, MaybeOrderedVecBuilder};
 use atlas_common::maybe_vec::MaybeVec;
 use atlas_common::node_id::NodeId;
 use atlas_common::ordering::{Orderable, SeqNo};
-use atlas_common::serialization_helper::SerMsg;
 use atlas_communication::message::StoredMessage;
 use atlas_metrics::benchmarks::BatchMeta;
 use getset::Getters;
-use itertools::Itertools;
 
 pub mod loggable;
 pub mod networking;
@@ -484,13 +480,16 @@ where
             OPPollResult::ProgressedDecision(_clear_ahead, rqs) => {
                 write!(f, "{} committed decisions", rqs.len())
             }
-            OPPollResult::QuorumJoined(clear_ahead, decs, node) => {
-                let len = if let Some(vec) = decs { vec.len() } else { 0 };
+            OPPollResult::QuorumJoined(clear_ahead, decisions, node) => {
+                let len = if let Some(vec) = decisions {
+                    vec.len()
+                } else {
+                    0
+                };
 
                 write!(
                     f,
-                    "Join information: {:?}. Contained Decisions {}, Clear Ahead {:?}",
-                    node, len, clear_ahead
+                    "Join information: {node:?}. Contained Decisions {len}, Clear Ahead {clear_ahead:?}"
                 )
             }
         }

@@ -2,7 +2,6 @@ use atlas_metrics::metrics::MetricKind;
 use atlas_metrics::{MetricLevel, MetricRegistry};
 
 /// Core frameworks will get 0XX metric ID
-
 pub const RQ_PP_CLONE_PENDING_TIME: &str = "RQ_CLONE_PENDING_TIME";
 pub const RQ_PP_CLONE_PENDING_TIME_ID: usize = 23;
 

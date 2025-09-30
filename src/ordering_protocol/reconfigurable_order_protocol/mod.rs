@@ -19,9 +19,8 @@ pub enum ReconfigurationAttemptResult {
 /// The trait that defines the necessary operations for a given ordering protocol to be reconfigurable
 /// Definitions:
 /// - An ordering protocol can only accept one reconfiguration request at a given time (and should only support
-/// one reconfiguration request at a time), Any other request during reconfiguration should return [ReconfigurationAttemptResult::CurrentlyReconfiguring]
-/// or if there was another error, just return [ReconfigurationAttemptResult::Failed].
-///
+///   one reconfiguration request at a time), Any other request during reconfiguration should return [ReconfigurationAttemptResult::CurrentlyReconfiguring]
+///   or if there was another error, just return [ReconfigurationAttemptResult::Failed].
 pub trait ReconfigurableOrderProtocol<RP>
 where
     RP: ReconfigurationProtocolMessage,

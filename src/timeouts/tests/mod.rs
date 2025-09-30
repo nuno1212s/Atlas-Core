@@ -47,7 +47,9 @@ pub mod timeouts_tests {
 
     impl TimeoutWorkerResponder for TimeoutTx {
         fn report_timeouts(&self, timeouts: Vec<Timeout>) -> atlas_common::error::Result<()> {
-            self.tx.send(timeouts)
+            self.tx
+                .send(timeouts)
+                .context("Failed to send timeouts to the test receiver")
         }
     }
 
