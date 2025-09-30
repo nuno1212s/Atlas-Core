@@ -1,13 +1,13 @@
+use anyhow::Context;
+use dyn_clone::DynClone;
+use getset::{CopyGetters, Getters};
+use itertools::Itertools;
 use std::any::Any;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-
-use dyn_clone::DynClone;
-use getset::{CopyGetters, Getters};
-use itertools::Itertools;
 
 use atlas_common::channel::sync::{new_bounded_sync, ChannelSyncTx};
 use atlas_common::node_id::NodeId;
@@ -98,10 +98,8 @@ where
     let mut handles = Vec::with_capacity(num_workers);
 
     for worker in 0..num_workers {
-        let (tx, rx) = new_bounded_sync(
-            channel_size,
-            Some(format!("TimeoutWorker Thread {}", worker)),
-        );
+        let (tx, rx) =
+            new_bounded_sync(channel_size, Some(format!("TimeoutWorker Thread {worker}")));
 
         worker::initialize_worker_thread(our_id, worker, rx, timeout_output.clone());
 
@@ -158,6 +156,7 @@ impl TimeoutsHandle {
                 is_cumulative: cumulative,
                 extra_info,
             }))
+            .context("Failed to send message to timeout worker handle")
     }
 
     //#[instrument(skip(self, timeout_id), level = "trace")]
@@ -177,11 +176,12 @@ impl TimeoutsHandle {
                 is_cumulative: cumulative,
                 extra_info,
             })
-            .group_by(|rq| self.worker_id_for_timeout(rq.id()))
+            .chunk_by(|rq| self.worker_id_for_timeout(rq.id()))
             .into_iter()
             .try_for_each(|(worker_id, group)| {
                 self.worker_handles[worker_id].send(WorkerMessage::Requests(group.collect()))
             })
+            .context("Failed to send message to timeout worker handle")
     }
 
     //#[instrument(skip(self), level = "trace")]
@@ -195,6 +195,7 @@ impl TimeoutsHandle {
                 id: timeout_id,
                 from,
             }))
+            .context("Failed to send message to timeout worker handle")
     }
 
     //#[instrument(skip(self, acks), level = "trace", fields(acks = acks.len()))]
@@ -204,11 +205,12 @@ impl TimeoutsHandle {
     ) -> atlas_common::error::Result<()> {
         acks.into_iter()
             .map(|(id, from)| TimeoutAck { id, from })
-            .group_by(|ack| self.worker_id_for_timeout(ack.id()))
+            .chunk_by(|ack| self.worker_id_for_timeout(ack.id()))
             .into_iter()
             .try_for_each(|(worker_id, group)| {
                 self.worker_handles[worker_id].send(WorkerMessage::Acks(group.collect()))
             })
+            .context("Failed to send message to timeout worker handle")
     }
 
     //#[instrument(skip(self), level = "trace")]
@@ -218,6 +220,7 @@ impl TimeoutsHandle {
     ) -> atlas_common::error::Result<()> {
         self.worker_for_timeout(&timeout)
             .send(WorkerMessage::Cancel(timeout))
+            .context("Failed to send message to timeout worker handle")
     }
 
     //#[instrument(skip(self), level = "trace", fields(cancelled_timeouts = timeouts.len()))]
@@ -232,6 +235,7 @@ impl TimeoutsHandle {
             .try_for_each(|(worker_id, group)| {
                 self.worker_handles[worker_id].send(WorkerMessage::CancelMultiple(group.collect()))
             })
+            .context("Failed to send message to timeout worker handle")
     }
 
     //#[instrument(skip(self), level = "trace")]
@@ -242,6 +246,7 @@ impl TimeoutsHandle {
         self.worker_handles
             .iter()
             .try_for_each(|worker| worker.send(WorkerMessage::CancelAll(mod_name.clone())))
+            .context("Failed to send message to timeout worker handle")
     }
 
     pub fn reset_all_timeouts_for_mod(
@@ -251,6 +256,7 @@ impl TimeoutsHandle {
         self.worker_handles
             .iter()
             .try_for_each(|worker| worker.send(WorkerMessage::ResetAll(mod_name.clone())))
+            .context("Failed to send message to timeout worker handle")
     }
 }
 

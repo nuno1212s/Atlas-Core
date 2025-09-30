@@ -1,9 +1,6 @@
 #![feature(associated_type_defaults)]
-#![feature(extract_if)]
 #![feature(btree_extract_if)]
-#![feature(hash_extract_if)]
 
-mod configurable;
 pub mod executor;
 pub mod followers;
 pub mod messages;
